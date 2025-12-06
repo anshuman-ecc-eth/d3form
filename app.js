@@ -1289,8 +1289,8 @@ function showContextMenu(event, element) {
     const x = event.pageX;
     const y = event.pageY;
 
-    menu.style('left', ${ x }px)
-        .style('top', ${ y }px)
+    menu.style('left', `${x}px`)
+        .style('top', `${y}px`)
         .classed('hidden', false);
 
     // Store element ID for actions
