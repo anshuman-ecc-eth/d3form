@@ -1106,6 +1106,9 @@ function selectTool(tool) {
     state.currentTool = tool;
     updateToolSelection();
 
+    // Set data-tool for cursor styling
+    svg.attr('data-tool', tool);
+
     if (tool === 'select') {
         svg.classed('select-mode', true);
     } else {

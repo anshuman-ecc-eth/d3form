@@ -798,3 +798,39 @@ select.range-input option {
     background-color: white;
     color: var(--neutral-900);
 }
+
+/* ===== Custom Tool Cursors ===== */
+/* Select Tool - Default pointer */
+svg[data-tool="select"] {
+    cursor: default;
+}
+
+/* Span Tool - Crosshair or specific icon */
+svg[data-tool="span"] {
+    cursor: crosshair;
+}
+
+/* Rectangle Tool */
+svg[data-tool="rectangle"] {
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" stroke="white" stroke-width="2" fill="none"/><rect x="3" y="3" width="18" height="18" rx="2" stroke="black" stroke-width="1" stroke-opacity="0.5" fill="none"/></svg>') 12 12, crosshair;
+}
+
+/* Circle Tool */
+svg[data-tool="circle"] {
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="9" stroke="black" stroke-width="1" stroke-opacity="0.5" fill="none"/></svg>') 12 12, crosshair;
+}
+
+/* Text Tool */
+svg[data-tool="text"] {
+    cursor: text;
+}
+
+/* Arrow Tool */
+svg[data-tool="arrow"] {
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="5" y1="12" x2="19" y2="12" stroke="white" stroke-width="2"/><polyline points="12 5 19 12 12 19" stroke="white" stroke-width="2" fill="none"/><line x1="5" y1="12" x2="19" y2="12" stroke="black" stroke-width="0.5" stroke-opacity="0.5"/><polyline points="12 5 19 12 12 19" stroke="black" stroke-width="0.5" stroke-opacity="0.5" fill="none"/></svg>') 12 12, crosshair;
+}
+
+/* Line Tool */
+svg[data-tool="line"] {
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="5" y1="19" x2="19" y2="5" stroke="white" stroke-width="2"/><line x1="5" y1="19" x2="19" y2="5" stroke="black" stroke-width="0.5" stroke-opacity="0.5"/></svg>') 12 12, crosshair;
+}
