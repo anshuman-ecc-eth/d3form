@@ -633,8 +633,10 @@ body {
     .logo {
         font-size: var(--font-size-lg);
     }
-} 
- 
+}
+
+   
+
 /* ===== Light Mode Theme ===== */
 :root.light-mode {
     --neutral-50: #0f172a;
@@ -647,7 +649,7 @@ body {
     --neutral-700: #e2e8f0;
     --neutral-800: #f1f5f9;
     --neutral-900: #f8fafc;
-    
+
     --gradient-dark: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.2);
 }
@@ -685,15 +687,43 @@ body {
 }
 
 :root.light-mode .canvas-wrapper {
-    background:
-        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
-        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-image:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
 :root.light-mode .present-controls {
-    background: rgba(248, 250, 252, 0.95);
+    background: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode .color-input {
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode .range-input {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode .secondary-btn {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: var(--neutral-700);
+}
+
+:root.light-mode .secondary-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    border-color: var(--primary-600);
+}
+
+:root.light-mode .property-label {
+    color: var(--neutral-600);
+}
+
+:root.light-mode .range-value {
+    color: var(--neutral-600);
 }
 
 /* ===== Context Menu ===== */
