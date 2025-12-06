@@ -134,6 +134,16 @@ function createText(x, y, text = 'Double-click to edit') {
     };
 }
 
+function createPath(d, x = 0, y = 0) {
+    return {
+        id: generateId(),
+        type: 'path',
+        d,
+        x, y, // Position offset for the whole path
+        ...state.properties
+    };
+}
+
 // ===== Rendering Functions =====
 function renderElement(element, selection) {
     const group = selection || mainGroup;
@@ -215,6 +225,17 @@ function renderElement(element, selection) {
                 renderElement(child, g);
             });
             return g;
+
+        case 'path':
+            return group.append('path')
+                .attr('id', element.id)
+                .attr('d', element.d)
+                .attr('transform', `translate(${element.x}, ${element.y})`)
+                .attr('fill', element.fill)
+                .attr('stroke', element.stroke)
+                .attr('stroke-width', element.strokeWidth)
+                .attr('opacity', element.opacity)
+                .style('cursor', 'move');
 
         case 'text':
             return group.append('text')
@@ -1169,6 +1190,7 @@ d3.select('#exportBtn').on('click', function () {
     URL.revokeObjectURL(url);
 });
 
+
 // Theme toggle
 d3.select('#themeToggleBtn').on('click', function () {
     const root = document.documentElement;
@@ -1188,6 +1210,187 @@ const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'light') {
     document.documentElement.classList.add('light-mode');
 }
+
+// ===== Templates Logic =====
+d3.select('#templatesBtn').on('click', function (event) {
+    event.stopPropagation();
+    const dropdown = d3.select('#templatesDropdown');
+    const isVisible = dropdown.style('display') === 'block';
+
+    // Close other menus if any
+    d3.selectAll('.dropdown-content').style('display', 'none');
+
+    if (!isVisible) {
+        dropdown.style('display', 'block');
+    }
+});
+
+// Close dropdown when clicking outside
+d3.select('body').on('click.dropdown', function () {
+    d3.selectAll('.dropdown-content').style('display', 'none');
+});
+
+d3.selectAll('.dropdown-item').on('click', function () {
+    const type = d3.select(this).attr('data-template');
+    applyTemplate(type);
+});
+
+function applyTemplate(type) {
+    const cx = width / 2;
+    const cy = height / 2;
+    let elements = [];
+
+    // Properties for templates
+    const colorprimary = '#6366f1';
+    const colorsecondary = '#ec4899';
+    const colorneutral = '#cbd5e1';
+
+    switch (type) {
+        case 'svg':
+            // Basic shapes
+            elements = [
+                createCircle(cx - 100, cy, cx - 40, cy + 60),
+                createRectangle(cx - 20, cy - 30, cx + 40, cy + 30),
+                createLine(cx + 60, cy - 30, cx + 120, cy + 30)
+            ];
+            break;
+
+        case 'bar':
+            // Bar chart
+            // Axes
+            const barStartX = cx - 150;
+            const barStartY = cy + 100;
+            elements.push({ ...createLine(barStartX, barStartY, barStartX + 300, barStartY), stroke: colorneutral }); // X
+            elements.push({ ...createLine(barStartX, barStartY, barStartX, barStartY - 200), stroke: colorneutral }); // Y
+
+            // Bars
+            const data = [50, 120, 80, 160, 40];
+            const barWidth = 40;
+            const gap = 15;
+
+            data.forEach((val, i) => {
+                const h = val;
+                const x = barStartX + 20 + i * (barWidth + gap);
+                const y = barStartY - h;
+                elements.push({
+                    ...createRectangle(x, y, x + barWidth, barStartY),
+                    fill: i % 2 === 0 ? colorprimary : colorsecondary
+                });
+            });
+            break;
+
+        case 'line':
+            // Simple line chart using Path
+            const lineStartX = cx - 150;
+            const lineStartY = cy + 100;
+            elements.push({ ...createLine(lineStartX, lineStartY, lineStartX + 300, lineStartY), stroke: colorneutral }); // X
+            elements.push({ ...createLine(lineStartX, lineStartY, lineStartX, lineStartY - 200), stroke: colorneutral }); // Y
+
+            // Path data: M 0 0 L 50 -50 L 100 -30 ...
+            const lineData = [[0, 0], [50, -50], [100, -30], [150, -120], [200, -80], [250, -150]];
+            const d = "M " + lineData.map(p => `${p[0]},${p[1]}`).join(" L ");
+            elements.push(createPath(d, lineStartX, lineStartY));
+
+            // Add dots
+            lineData.forEach(p => {
+                elements.push({
+                    ...createCircle(lineStartX + p[0] - 4, lineStartY + p[1] - 4, lineStartX + p[0] + 4, lineStartY + p[1] + 4),
+                    fill: '#fff', stroke: colorprimary, strokeWidth: 2
+                });
+            });
+            break;
+
+        case 'scatter':
+            // Scatter plot
+            const scatStartX = cx - 150;
+            const scatStartY = cy + 100;
+            elements.push({ ...createLine(scatStartX, scatStartY, scatStartX + 300, scatStartY), stroke: colorneutral }); // X
+            elements.push({ ...createLine(scatStartX, scatStartY, scatStartX, scatStartY - 200), stroke: colorneutral }); // Y
+
+            for (let i = 0; i < 15; i++) {
+                const rx = Math.random() * 280;
+                const ry = Math.random() * -180;
+                const r = 4 + Math.random() * 6;
+                elements.push({
+                    ...createCircle(scatStartX + rx - r, scatStartY + ry - r, scatStartX + rx + r, scatStartY + ry + r),
+                    fill: Math.random() > 0.5 ? colorprimary : colorsecondary,
+                    opacity: 0.7
+                });
+            }
+            break;
+
+        case 'area':
+            // Area chart
+            const areaStartX = cx - 150;
+            const areaStartY = cy + 100;
+            elements.push({ ...createLine(areaStartX, areaStartY, areaStartX + 300, areaStartY), stroke: colorneutral }); // X
+            elements.push({ ...createLine(areaStartX, areaStartY, areaStartX, areaStartY - 200), stroke: colorneutral }); // Y
+
+            const areaData = [[0, 0], [50, -50], [100, -30], [150, -120], [200, -80], [250, -150], [300, 0]];
+            const ad = "M " + areaData.map(p => `${p[0]},${p[1]}`).join(" L ") + " Z";
+            elements.push({ ...createPath(ad, areaStartX, areaStartY), fill: colorprimary, opacity: 0.3, stroke: 'none' });
+            // Top line
+            const ld = "M " + areaData.slice(0, 6).map(p => `${p[0]},${p[1]}`).join(" L ");
+            elements.push({ ...createPath(ld, areaStartX, areaStartY), fill: 'none', stroke: colorprimary, strokeWidth: 2 });
+            break;
+
+        case 'pie':
+            // Pie chart - manually simplified arcs
+            // M 0 0 L 100 0 A 100 100 0 0 1 50 86.6 Z (Example sector)
+            // Let's make 3 slices
+            // Slice 1: 0 to 120deg
+            const p1 = "M 0 0 L 100 0 A 100 100 0 0 1 -50 86.6 Z";
+            elements.push({ ...createPath(p1, cx, cy), fill: colorprimary });
+
+            // Slice 2: 120 to 240deg
+            const p2 = "M 0 0 L -50 86.6 A 100 100 0 0 1 -50 -86.6 Z";
+            elements.push({ ...createPath(p2, cx, cy), fill: colorsecondary });
+
+            // Slice 3: 240 to 360deg
+            const p3 = "M 0 0 L -50 -86.6 A 100 100 0 0 1 100 0 Z";
+            elements.push({ ...createPath(p3, cx, cy), fill: '#fbbf24' }); // amber
+            break;
+
+        case 'hierarchy':
+        case 'network':
+        case 'axes':
+        case 'map':
+        default:
+            // Placeholder for complex types
+            elements.push(createText(cx - 100, cy, `${type.charAt(0).toUpperCase() + type.slice(1)} Template Placeholder`));
+            elements.push(createRectangle(cx - 120, cy - 20, cx + 120, cy + 40));
+            break;
+    }
+
+    // Group them
+    if (elements.length > 0) {
+        // Add to frame
+        const frameElements = getCurrentFrameElements();
+
+        // If multiple elements, group them
+        if (elements.length > 1) {
+            const group = {
+                id: generateId(),
+                type: 'group',
+                children: elements,
+                x: 0, y: 0
+            };
+            frameElements.push(group);
+            // Select the group
+            state.selectedElements = [group];
+            state.selectedElement = group;
+        } else {
+            frameElements.push(elements[0]);
+            state.selectedElements = [elements[0]];
+            state.selectedElement = elements[0];
+        }
+
+        renderAllElements();
+        updateSelection();
+        saveHistory();
+    }
+}
+
 
 
 // ===== History Management =====
