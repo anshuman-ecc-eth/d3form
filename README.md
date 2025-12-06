@@ -1,5 +1,7 @@
 # d3form - Interactive Diagramming & Presentations
 
+**Live App:** [https://anshuman-ecc-eth.github.io/d3form/](https://anshuman-ecc-eth.github.io/d3form/)
+
 A beautiful, no-code diagramming platform built entirely with D3.js featuring smooth animated transitions between frames.
 
 ## Features
@@ -22,16 +24,16 @@ A beautiful, no-code diagramming platform built entirely with D3.js featuring sm
 - **No simple fade outs or jumps** - everything transforms smoothly!
 
 ### ✨ Premium Features
-- Modern glassmorphic UI with dark theme
-- Smooth D3 transitions with cubic-in-out easing (800ms)
-- **Live property editing** - Change fill, stroke, opacity of selected elements
-- **Drag-to-resize** - Click and drag element edges/corners to resize
-- **Undo/Redo** - Full history tracking with Ctrl+Z/Ctrl+Y (50 steps)
-- **Clipboard operations** - Cut, copy, and paste elements with Ctrl+X/C/V
-- Drag and drop element positioning
-- Customizable colors, stroke width, and opacity
-- Keyboard shortcuts for quick access
-- Export/Import functionality (JSON)
+- **Light & Dark Mode**: Toggle between themes for comfortable viewing
+- **Context Menu**: Right-click on any object to quickly change properties or delete
+- **Advanced Text Editing**: Choose from multiple fonts (Inter, Arial, Times New Roman, etc.)
+- **Object Linking**: Create diagrams with arrows and lines that can be styled (solid, dashed, dotted)
+- **Live Property Editing**: Change fill, stroke, opacity, and fonts instantly
+- **Drag-to-resize**: Click and drag element edges/corners to resize
+- **Undo/Redo**: Full history tracking with Ctrl+Z/Ctrl+Y (50 steps)
+- **Clipboard operations**: Cut, copy, and paste elements with Ctrl+X/C/V
+- **Drag and drop**: Intuitive element positioning
+- **Export/Import**: Save your work as JSON
 
 ## How to Use
 
@@ -53,8 +55,11 @@ A beautiful, no-code diagramming platform built entirely with D3.js featuring sm
    - Stroke color
    - Stroke width
    - Opacity
+   - Font Family & Size
+   - Line Styles
 5. **Edit text** by double-clicking text elements
-6. **Delete elements** by selecting them and pressing Delete/Backspace
+6. **Context Menu**: Right-click any element for quick actions
+7. **Delete elements** by selecting them and pressing Delete/Backspace
 
 #### Working with Frames
 1. **Create frames** using the "Add Frame" button
