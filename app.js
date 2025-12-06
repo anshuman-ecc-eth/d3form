@@ -1302,51 +1302,26 @@ function hideContextMenu() {
 }
 
 // Context Menu Actions
+// Context Menu Actions
+d3.select('#ctxCopy').on('click', () => {
+    copyElement();
+    hideContextMenu();
+});
+
+d3.select('#ctxPaste').on('click', () => {
+    pasteElement();
+    hideContextMenu();
+});
+
 d3.select('#ctxChangeFill').on('click', () => {
-    const id = d3.select('#contextMenu').attr('data-element-id');
-    const element = getCurrentFrameElements().find(el => el.id === id);
-    if (element) {
-        element.fill = state.properties.fill;
-        saveElementToFrame(element);
-        renderAllElements();
-        saveHistory();
-    }
+    // Trigger the color picker
+    d3.select('#fillColor').node().click();
     hideContextMenu();
 });
 
 d3.select('#ctxChangeStroke').on('click', () => {
-    const id = d3.select('#contextMenu').attr('data-element-id');
-    const element = getCurrentFrameElements().find(el => el.id === id);
-    if (element) {
-        element.stroke = state.properties.stroke;
-        saveElementToFrame(element);
-        renderAllElements();
-        saveHistory();
-    }
-    hideContextMenu();
-});
-
-d3.select('#ctxChangeWidth').on('click', () => {
-    const id = d3.select('#contextMenu').attr('data-element-id');
-    const element = getCurrentFrameElements().find(el => el.id === id);
-    if (element) {
-        element.strokeWidth = state.properties.strokeWidth;
-        saveElementToFrame(element);
-        renderAllElements();
-        saveHistory();
-    }
-    hideContextMenu();
-});
-
-d3.select('#ctxChangeOpacity').on('click', () => {
-    const id = d3.select('#contextMenu').attr('data-element-id');
-    const element = getCurrentFrameElements().find(el => el.id === id);
-    if (element) {
-        element.opacity = state.properties.opacity;
-        saveElementToFrame(element);
-        renderAllElements();
-        saveHistory();
-    }
+    // Trigger the color picker
+    d3.select('#strokeColor').node().click();
     hideContextMenu();
 });
 
