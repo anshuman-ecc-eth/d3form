@@ -46,6 +46,9 @@ let height = window.innerHeight - 80;
 
 svg.attr('width', width).attr('height', height);
 
+// Initialize cursor for default tool
+svg.attr('data-tool', state.currentTool);
+
 // Create main group for elements
 const mainGroup = svg.append('g').attr('class', 'main-group');
 
@@ -283,6 +286,17 @@ function setupElementInteractions(selection, element) {
 
                 startDrag(event, element);
             }
+        })
+        .on('contextmenu', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Select element if not already selected
+            if (!state.selectedElements.some(e => e.id === element.id)) {
+                selectElement(element);
+            }
+
+            showContextMenu(event, element);
         })
         .on('dblclick', function (event) {
             if (element.type === 'text') {
@@ -1181,6 +1195,170 @@ d3.select('#strokeWidth').on('input', updateProperties);
 d3.select('#opacity').on('input', updateProperties);
 d3.select('#fontFamily').on('change', updateProperties);
 d3.select('#fontSize').on('input', updateProperties);
+
+// ===== Context Menu =====
+function showContextMenu(event, element) {
+    hideContextMenu();
+
+    const menu = d3.select('body').append('div')
+        .attr('class', 'context-menu')
+        .style('left', event.pageX + 'px')
+        .style('top', event.pageY + 'px');
+
+    // Fill color option
+    if (element.type !== 'line' && element.type !== 'arrow') {
+        const fillItem = menu.append('div')
+            .attr('class', 'context-menu-item');
+
+        fillItem.append('span')
+            .attr('class', 'context-menu-label')
+            .text('Fill');
+
+        fillItem.append('input')
+            .attr('type', 'color')
+            .attr('class', 'context-color-input')
+            .attr('value', element.fill || '#6366f1')
+            .on('input', function () {
+                element.fill = this.value;
+                saveElementToFrame(element);
+                renderAllElements();
+                updateSelection();
+                saveHistory();
+            });
+    }
+
+    // Stroke color option
+    const strokeItem = menu.append('div')
+        .attr('class', 'context-menu-item');
+
+    strokeItem.append('span')
+        .attr('class', 'context-menu-label')
+        .text('Stroke');
+
+    strokeItem.append('input')
+        .attr('type', 'color')
+        .attr('class', 'context-color-input')
+        .attr('value', element.stroke || '#1e293b')
+        .on('input', function () {
+            element.stroke = this.value;
+            saveElementToFrame(element);
+            renderAllElements();
+            updateSelection();
+            saveHistory();
+        });
+
+    // Stroke width option
+    const widthItem = menu.append('div')
+        .attr('class', 'context-menu-item');
+
+    widthItem.append('span')
+        .attr('class', 'context-menu-label')
+        .text('Width');
+
+    const widthInput = widthItem.append('input')
+        .attr('type', 'range')
+        .attr('class', 'context-range-input')
+        .attr('min', '1')
+        .attr('max', '10')
+        .attr('value', element.strokeWidth || 2)
+        .on('input', function () {
+            element.strokeWidth = +this.value;
+            widthValue.text(this.value);
+            saveElementToFrame(element);
+            renderAllElements();
+            updateSelection();
+            saveHistory();
+        });
+
+    const widthValue = widthItem.append('span')
+        .attr('class', 'context-value')
+        .text(element.strokeWidth || 2);
+
+    // Opacity option
+    const opacityItem = menu.append('div')
+        .attr('class', 'context-menu-item');
+
+    opacityItem.append('span')
+        .attr('class', 'context-menu-label')
+        .text('Opacity');
+
+    const opacityInput = opacityItem.append('input')
+        .attr('type', 'range')
+        .attr('class', 'context-range-input')
+        .attr('min', '0')
+        .attr('max', '100')
+        .attr('value', (element.opacity || 1) * 100)
+        .on('input', function () {
+            element.opacity = +this.value / 100;
+            opacityValue.text(this.value + '%');
+            saveElementToFrame(element);
+            renderAllElements();
+            updateSelection();
+            saveHistory();
+        });
+
+    const opacityValue = opacityItem.append('span')
+        .attr('class', 'context-value')
+        .text(Math.round((element.opacity || 1) * 100) + '%');
+
+    // Divider
+    menu.append('div').attr('class', 'context-menu-divider');
+
+    // Duplicate action
+    menu.append('div')
+        .attr('class', 'context-menu-item context-menu-action')
+        .text('Duplicate')
+        .on('click', function () {
+            const newElement = JSON.parse(JSON.stringify(element));
+            newElement.id = generateId();
+            newElement.x = (newElement.x || 0) + 20;
+            newElement.y = (newElement.y || 0) + 20;
+            if (newElement.x1 !== undefined) {
+                newElement.x1 += 20;
+                newElement.y1 += 20;
+                newElement.x2 += 20;
+                newElement.y2 += 20;
+            }
+            if (newElement.cx !== undefined) {
+                newElement.cx += 20;
+                newElement.cy += 20;
+            }
+            getCurrentFrameElements().push(newElement);
+            selectElement(newElement);
+            renderAllElements();
+            saveHistory();
+            hideContextMenu();
+        });
+
+    // Delete action
+    menu.append('div')
+        .attr('class', 'context-menu-item context-menu-action context-menu-danger')
+        .text('Delete')
+        .on('click', function () {
+            const frameElements = getCurrentFrameElements();
+            const index = frameElements.findIndex(el => el.id === element.id);
+            if (index >= 0) {
+                frameElements.splice(index, 1);
+                state.selectedElement = null;
+                state.selectedElements = [];
+                renderAllElements();
+                updateSelection();
+                saveHistory();
+            }
+            hideContextMenu();
+        });
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+        d3.select('body').on('click.contextmenu', hideContextMenu);
+    }, 10);
+}
+
+function hideContextMenu() {
+    d3.selectAll('.context-menu').remove();
+    d3.select('body').on('click.contextmenu', null);
+}
+
 
 d3.select('#exportBtn').on('click', function () {
     const dataStr = JSON.stringify(state.frames, null, 2);
