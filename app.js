@@ -1191,49 +1191,9 @@ d3.select('#exportBtn').on('click', function () {
 });
 
 
-// Theme toggle
-d3.select('#themeToggleBtn').on('click', function () {
-    const root = document.documentElement;
-    const isLightMode = root.classList.contains('light-mode');
 
-    if (isLightMode) {
-        root.classList.remove('light-mode');
-        localStorage.setItem('theme', 'dark');
-    } else {
-        root.classList.add('light-mode');
-        localStorage.setItem('theme', 'light');
-    }
-});
 
-// Load saved theme on startup
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'light') {
-    document.documentElement.classList.add('light-mode');
-}
 
-// ===== Templates Logic =====
-d3.select('#templatesBtn').on('click', function (event) {
-    event.stopPropagation();
-    const dropdown = d3.select('#templatesDropdown');
-    const isVisible = dropdown.style('display') === 'block';
-
-    // Close other menus if any
-    d3.selectAll('.dropdown-content').style('display', 'none');
-
-    if (!isVisible) {
-        dropdown.style('display', 'block');
-    }
-});
-
-// Close dropdown when clicking outside
-d3.select('body').on('click.dropdown', function () {
-    d3.selectAll('.dropdown-content').style('display', 'none');
-});
-
-d3.selectAll('.dropdown-item').on('click', function () {
-    const type = d3.select(this).attr('data-template');
-    applyTemplate(type);
-});
 
 function applyTemplate(type) {
     const cx = width / 2;

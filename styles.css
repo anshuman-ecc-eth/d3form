@@ -322,6 +322,26 @@ body {
     box-shadow: var(--shadow-glow);
 }
 
+/* Fix for Select elements using range-input class */
+select.range-input {
+    height: 36px !important;
+    background-color: var(--neutral-800);
+    color: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0 var(--spacing-sm);
+    cursor: pointer;
+}
+
+select.range-input:focus {
+    border-color: var(--primary-600);
+    box-shadow: var(--shadow-glow);
+}
+
+select.range-input option {
+    background-color: var(--neutral-800);
+    color: var(--neutral-100);
+}
+
 .range-input::-moz-range-thumb {
     width: 18px;
     height: 18px;
@@ -750,4 +770,31 @@ body {
 
 :root.light-mode .tool-separator {
     background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Fix for Select elements contrast */
+select.range-input {
+    height: 30px !important;
+    background-color: var(--neutral-800);
+    color: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0 var(--spacing-sm);
+    cursor: pointer;
+}
+
+select.range-input option {
+    background-color: var(--neutral-800);
+    color: var(--neutral-100);
+}
+
+/* Ensure light mode also has readable selects if needed, though mostly relying on default dark theme for now */
+:root.light-mode select.range-input {
+    background-color: white;
+    color: var(--neutral-900);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+:root.light-mode select.range-input option {
+    background-color: white;
+    color: var(--neutral-900);
 }
