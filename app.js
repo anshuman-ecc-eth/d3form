@@ -6,6 +6,9 @@ const state = {
     frames: [{ id: 0, name: 'Frame 1', elements: [] }],
     elements: [],
     selectedElement: null,
+    selectedElements: [], // Multi-selection support
+    isSelecting: false,   // Span selection state
+    selectionBox: null,   // Span selection box
     isDrawing: false,
     isResizing: false,
     resizeHandle: null,
@@ -24,6 +27,7 @@ const state = {
     dragState: {
         isDragging: false,
         element: null,
+        elements: [], // Store multiple elements being dragged
         startX: 0,
         startY: 0,
         offsetX: 0,
@@ -202,6 +206,16 @@ function renderElement(element, selection) {
 
             return arrowGroup;
 
+        case 'group':
+            const g = group.append('g')
+                .attr('id', element.id)
+                .style('cursor', 'move');
+
+            element.children.forEach(child => {
+                renderElement(child, g);
+            });
+            return g;
+
         case 'text':
             return group.append('text')
                 .attr('id', element.id)
@@ -234,9 +248,18 @@ function setupElementInteractions(selection, element) {
 
     selection
         .on('mousedown', function (event) {
-            if (state.currentTool === 'select') {
+            if (state.currentTool === 'select' || state.currentTool === 'span') {
                 event.stopPropagation();
-                selectElement(element);
+
+                if (event.shiftKey) {
+                    selectElement(element, true);
+                } else if (!state.selectedElements.some(e => e.id === element.id)) {
+                    selectElement(element);
+                } else {
+                    state.selectedElement = element;
+                    if (state.selectedElements.length === 1) syncPropertiesFromElement(element);
+                }
+
                 startDrag(event, element);
             }
         })
@@ -250,24 +273,43 @@ function setupElementInteractions(selection, element) {
             if (state.mode === 'edit') {
                 event.preventDefault();
                 event.stopPropagation();
-                selectElement(element);
+
+                if (!state.selectedElements.some(e => e.id === element.id)) {
+                    selectElement(element);
+                }
                 showContextMenu(event, element);
             }
         });
 }
 
-function selectElement(element) {
-    state.selectedElement = element;
+function selectElement(element, toggle = false) {
+    if (toggle) {
+        const index = state.selectedElements.findIndex(e => e.id === element.id);
+        if (index >= 0) {
+            state.selectedElements.splice(index, 1);
+        } else {
+            state.selectedElements.push(element);
+        }
+    } else {
+        state.selectedElements = [element];
+    }
+
+    state.selectedElement = state.selectedElements[state.selectedElements.length - 1] || null;
     updateSelection();
-    syncPropertiesFromElement(element);
+
+    if (state.selectedElements.length === 1) {
+        syncPropertiesFromElement(element);
+    }
 }
 
 function updateSelection() {
-    mainGroup.selectAll('*').classed('element-selected', false);
+    mainGroup.selectAll('.element-selected').classed('element-selected', false);
 
-    if (state.selectedElement) {
-        mainGroup.select(`#${state.selectedElement.id}`)
-            .classed('element-selected', true);
+    if (state.selectedElements.length > 0) {
+        state.selectedElements.forEach(el => {
+            mainGroup.select(`#${el.id}`)
+                .classed('element-selected', true);
+        });
     }
 }
 
@@ -307,9 +349,15 @@ function syncPropertiesFromElement(element) {
 
 function startDrag(event, element) {
     const pos = getMousePosition(event);
+
+    // If element not in selection, select it exclusively
+    if (!state.selectedElements.find(e => e.id === element.id)) {
+        selectElement(element);
+    }
+
     state.dragState = {
         isDragging: true,
-        element: element,
+        elements: [...state.selectedElements],
         startX: pos.x,
         startY: pos.y,
         offsetX: 0,
@@ -337,10 +385,21 @@ svg.on('mousedown', function (event) {
 
     const pos = getMousePosition(event);
 
+    if (state.currentTool === 'span') {
+        state.isSelecting = true;
+        state.selectionBox = { startX: pos.x, startY: pos.y, x: pos.x, y: pos.y, width: 0, height: 0 };
+
+        if (!event.shiftKey) {
+            state.selectedElements = [];
+            updateSelection();
+        }
+        return;
+    }
+
     if (state.currentTool === 'select') {
         // Check if clicking on a resize handle
-        if (state.selectedElement) {
-            const handle = getResizeHandle(state.selectedElement, pos);
+        if (state.selectedElements.length === 1) {
+            const handle = getResizeHandle(state.selectedElements[0], pos);
             if (handle) {
                 state.isResizing = true;
                 state.resizeHandle = handle;
@@ -349,8 +408,13 @@ svg.on('mousedown', function (event) {
             }
         }
 
-        state.selectedElement = null;
-        updateSelection();
+        // Click outside? Deselect
+        // But dragging handles this too
+        if (event.target.id === 'canvas' || event.target.tagName === 'svg') {
+            state.selectedElements = [];
+            state.selectedElement = null;
+            updateSelection();
+        }
     } else if (state.currentTool === 'text') {
         const element = createText(pos.x, pos.y);
         saveElementToFrame(element);
@@ -369,20 +433,32 @@ svg.on('mousemove', function (event) {
 
     const pos = getMousePosition(event);
 
+    // Span Selection
+    if (state.isSelecting) {
+        const box = state.selectionBox;
+        box.x = Math.min(box.startX, pos.x);
+        box.y = Math.min(box.startY, pos.y);
+        box.width = Math.abs(pos.x - box.startX);
+        box.height = Math.abs(pos.y - box.startY);
+
+        renderSelectionBox();
+        return;
+    }
+
     // Handle dragging
     if (state.dragState.isDragging && state.currentTool === 'select') {
         const dx = pos.x - state.dragState.startX;
         const dy = pos.y - state.dragState.startY;
 
-        updateElementPosition(state.dragState.element, dx, dy);
+        updateElementPosition(dx, dy);
         state.dragState.startX = pos.x;
         state.dragState.startY = pos.y;
         return;
     }
 
     // Handle resizing
-    if (state.isResizing && state.selectedElement) {
-        resizeElement(state.selectedElement, pos, state.resizeHandle);
+    if (state.isResizing && state.selectedElements.length === 1) {
+        resizeElement(state.selectedElements[0], pos, state.resizeHandle);
         renderAllElements();
         return;
     }
@@ -425,16 +501,36 @@ svg.on('mouseup', function (event) {
     if (state.mode !== 'edit') return;
 
     // End dragging
+    // End dragging
     if (state.dragState.isDragging) {
-        saveElementToFrame(state.dragState.element);
+        state.dragState.elements.forEach(el => saveElementToFrame(el));
         state.dragState.isDragging = false;
+        state.dragState.elements = [];
         state.dragState.element = null;
         saveHistory();
     }
 
+    // End Span Selection
+    if (state.isSelecting) {
+        const box = state.selectionBox;
+        const elements = getCurrentFrameElements();
+
+        elements.forEach(el => {
+            if (isElementInBox(el, box)) {
+                selectElement(el, true); // Add to selection
+            }
+        });
+
+        state.isSelecting = false;
+        state.selectionBox = null;
+        d3.select('#selectionBox').remove();
+    }
+
     // End resizing
     if (state.isResizing) {
-        saveElementToFrame(state.selectedElement);
+        if (state.selectedElements.length === 1) {
+            saveElementToFrame(state.selectedElements[0]);
+        }
         state.isResizing = false;
         state.resizeHandle = null;
         saveHistory();
@@ -452,8 +548,23 @@ svg.on('mouseup', function (event) {
     state.startPoint = null;
 });
 
-function updateElementPosition(element, dx, dy) {
+function updateElementPosition(dx, dy) {
+    const elementsToMove = state.dragState.elements.length > 0 ? state.dragState.elements : [];
+
+    elementsToMove.forEach(element => {
+        moveElementRecursive(element, dx, dy);
+    });
+
+    renderAllElements();
+}
+
+function moveElementRecursive(element, dx, dy) {
     switch (element.type) {
+        case 'group':
+            element.children.forEach(child => moveElementRecursive(child, dx, dy));
+            element.x += dx;
+            element.y += dy;
+            break;
         case 'rectangle':
             element.x += dx;
             element.y += dy;
@@ -479,8 +590,6 @@ function updateElementPosition(element, dx, dy) {
             element.y += dy;
             break;
     }
-
-    renderAllElements();
 }
 
 // ===== Resize Functions =====
@@ -582,12 +691,12 @@ function resizeElement(element, pos, handle) {
 }
 
 function updateCursorForResize(pos) {
-    if (!state.selectedElement) {
+    if (state.selectedElements.length !== 1) {
         svg.style('cursor', 'crosshair');
         return;
     }
 
-    const handle = getResizeHandle(state.selectedElement, pos);
+    const handle = getResizeHandle(state.selectedElements[0], pos);
 
     if (handle) {
         if (typeof handle === 'string') {
@@ -1207,6 +1316,14 @@ document.addEventListener('keydown', (event) => {
                 event.preventDefault();
                 pasteElement();
                 break;
+            case 'g':
+                event.preventDefault();
+                if (event.shiftKey) {
+                    ungroupSelectedElements();
+                } else {
+                    groupSelectedElements();
+                }
+                break;
         }
         return;
     }
@@ -1215,6 +1332,9 @@ document.addEventListener('keydown', (event) => {
         switch (event.key.toLowerCase()) {
             case 'v':
                 selectTool('select');
+                break;
+            case 's':
+                selectTool('span');
                 break;
             case 'r':
                 selectTool('rectangle');
@@ -1233,15 +1353,20 @@ document.addEventListener('keydown', (event) => {
                 break;
             case 'delete':
             case 'backspace':
-                if (state.selectedElement) {
+                if (state.selectedElements.length > 0) {
                     const elements = getCurrentFrameElements();
-                    const index = elements.findIndex(el => el.id === state.selectedElement.id);
-                    if (index >= 0) {
-                        elements.splice(index, 1);
-                        state.selectedElement = null;
-                        renderAllElements();
-                        saveHistory();
+                    const toDelete = new Set(state.selectedElements.map(e => e.id));
+
+                    for (let i = elements.length - 1; i >= 0; i--) {
+                        if (toDelete.has(elements[i].id)) {
+                            elements.splice(i, 1);
+                        }
                     }
+
+                    state.selectedElements = [];
+                    state.selectedElement = null;
+                    renderAllElements();
+                    saveHistory();
                 }
                 break;
         }
@@ -1342,3 +1467,126 @@ d3.select('#ctxDelete').on('click', () => {
 d3.select('body').on('click.contextmenu', () => {
     hideContextMenu();
 });
+
+// ===== Helper Functions =====
+
+function renderSelectionBox() {
+    let box = d3.select('#selectionBox');
+    if (box.empty()) {
+        box = svg.append('rect')
+            .attr('id', 'selectionBox')
+            .attr('class', 'selection-box')
+            .style('pointer-events', 'none');
+    }
+
+    if (state.selectionBox) {
+        box.attr('x', state.selectionBox.x)
+            .attr('y', state.selectionBox.y)
+            .attr('width', state.selectionBox.width)
+            .attr('height', state.selectionBox.height)
+            .style('display', 'block');
+    } else {
+        box.style('display', 'none');
+    }
+}
+
+function isElementInBox(element, box) {
+    let bbox;
+
+    // Calculate bounding box based on type
+    if (element.type === 'rectangle' || element.type === 'text') {
+        bbox = { x: element.x, y: element.type === 'text' ? element.y - 20 : element.y, width: element.width || 100, height: element.height || 20 };
+        // Text width approximation if not available
+        if (element.type === 'text') {
+            // Approximation
+            const len = (element.text || "").length;
+            bbox.width = len * (element.fontSize || 16) * 0.6;
+            bbox.height = (element.fontSize || 16);
+        }
+    } else if (element.type === 'circle') {
+        bbox = { x: element.cx - element.rx, y: element.cy - element.ry, width: element.rx * 2, height: element.ry * 2 };
+    } else if (element.type === 'line' || element.type === 'arrow') {
+        bbox = {
+            x: Math.min(element.x1, element.x2),
+            y: Math.min(element.y1, element.y2),
+            width: Math.abs(element.x2 - element.x1),
+            height: Math.abs(element.y2 - element.y1)
+        };
+    } else if (element.type === 'group') {
+        // Group BBox is union of children
+        // Simplified: just check if origin is in box? No, that's bad.
+        // Let's iterate children.
+        // Or recursively check?
+        // If ANY child is in box, select group.
+        return element.children.some(child => isElementInBox(child, box));
+    }
+
+    if (!bbox) return false;
+
+    // Check intersection
+    return (
+        bbox.x < box.x + box.width &&
+        bbox.x + bbox.width > box.x &&
+        bbox.y < box.y + box.height &&
+        bbox.y + bbox.height > box.y
+    );
+}
+
+function groupSelectedElements() {
+    if (state.selectedElements.length < 2) return;
+
+    const elementsToGroup = [...state.selectedElements];
+    const frameElements = getCurrentFrameElements();
+
+    // Sort logic to maintain some order? (Optional)
+
+    // Remove individual elements from frame
+    elementsToGroup.forEach(el => {
+        const idx = frameElements.findIndex(f => f.id === el.id);
+        if (idx !== -1) frameElements.splice(idx, 1);
+    });
+
+    const groupElement = {
+        id: generateId(),
+        type: 'group',
+        children: elementsToGroup,
+        // Calculate abstract position (optional, used for dragging group together if we implemented relative coords)
+        x: 0, y: 0
+    };
+
+    frameElements.push(groupElement);
+    state.selectedElements = [groupElement];
+    state.selectedElement = groupElement;
+
+    renderAllElements();
+    updateSelection();
+    saveHistory();
+}
+
+function ungroupSelectedElements() {
+    if (state.selectedElements.length !== 1 || state.selectedElements[0].type !== 'group') return;
+
+    const group = state.selectedElements[0];
+    const frameElements = getCurrentFrameElements();
+
+    // Remove group
+    const idx = frameElements.findIndex(f => f.id === group.id);
+    if (idx !== -1) frameElements.splice(idx, 1);
+
+    // Add children back to frame
+    group.children.forEach(child => {
+        frameElements.push(child);
+    });
+
+    state.selectedElements = [...group.children];
+    state.selectedElement = group.children[0];
+
+    renderAllElements();
+    updateSelection();
+    saveHistory();
+}
+
+// Bind new buttons
+d3.select('#groupBtn').on('click', groupSelectedElements);
+d3.select('#ungroupBtn').on('click', ungroupSelectedElements);
+
