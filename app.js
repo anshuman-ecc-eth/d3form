@@ -360,6 +360,14 @@ function renderElement(element, selection) {
                 .style('cursor', 'pointer')
                 .style('pointer-events', 'all');
 
+            // Calculate stroke-dasharray based on linkStyle
+            let dashArray = null;
+            switch (element.linkStyle) {
+                case 'dashed': dashArray = '10,5'; break;
+                case 'dotted': dashArray = '3,3'; break;
+                default: dashArray = null; // solid
+            }
+
             // Visible link line
             linkGroup.append('line')
                 .attr('x1', element.x1)
@@ -370,6 +378,7 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('stroke-linecap', 'round')
+                .attr('stroke-dasharray', dashArray)
                 .style('pointer-events', 'none');
 
             return linkGroup;
@@ -400,16 +409,31 @@ function renderElement(element, selection) {
                 .attr('stroke-linecap', 'round')
                 .style('pointer-events', 'none');
 
-            // Arrow head
-            const angle = Math.atan2(element.y2 - element.y1, element.x2 - element.x1);
+            // Arrow heads based on arrowHeads property (default: 'end')
+            const arrowHeads = element.arrowHeads || 'end';
             const arrowSize = 12;
 
-            arrowGroup.append('polygon')
-                .attr('points', `0,0 -${arrowSize},-${arrowSize / 2} -${arrowSize},${arrowSize / 2}`)
-                .attr('fill', element.stroke)
-                .attr('opacity', element.opacity)
-                .attr('transform', `translate(${element.x2},${element.y2}) rotate(${angle * 180 / Math.PI})`)
-                .style('pointer-events', 'none');
+            // End arrow head (at x2, y2)
+            if (arrowHeads === 'end' || arrowHeads === 'both') {
+                const angleEnd = Math.atan2(element.y2 - element.y1, element.x2 - element.x1);
+                arrowGroup.append('polygon')
+                    .attr('points', `0,0 -${arrowSize},-${arrowSize / 2} -${arrowSize},${arrowSize / 2}`)
+                    .attr('fill', element.stroke)
+                    .attr('opacity', element.opacity)
+                    .attr('transform', `translate(${element.x2},${element.y2}) rotate(${angleEnd * 180 / Math.PI})`)
+                    .style('pointer-events', 'none');
+            }
+
+            // Start arrow head (at x1, y1)
+            if (arrowHeads === 'start' || arrowHeads === 'both') {
+                const angleStart = Math.atan2(element.y1 - element.y2, element.x1 - element.x2);
+                arrowGroup.append('polygon')
+                    .attr('points', `0,0 -${arrowSize},-${arrowSize / 2} -${arrowSize},${arrowSize / 2}`)
+                    .attr('fill', element.stroke)
+                    .attr('opacity', element.opacity)
+                    .attr('transform', `translate(${element.x1},${element.y1}) rotate(${angleStart * 180 / Math.PI})`)
+                    .style('pointer-events', 'none');
+            }
 
             return arrowGroup;
 
@@ -844,6 +868,14 @@ function syncPropertiesFromElement(element) {
     d3.select('#rotation').property('value', state.properties.rotation);
     d3.select('#fontFamily').property('value', state.properties.fontFamily);
     d3.select('#fontSize').property('value', state.properties.fontSize);
+
+    // Sync link and arrow properties
+    if (element.type === 'link') {
+        d3.select('#linkStyle').property('value', element.linkStyle || 'solid');
+    }
+    if (element.type === 'arrow') {
+        d3.select('#arrowStyle').property('value', element.arrowHeads || 'end');
+    }
 
     // Update value labels
     d3.select('#strokeWidth').node().nextElementSibling.textContent = state.properties.strokeWidth;
@@ -2488,6 +2520,32 @@ d3.select('#rotation').on('input', updateRotation);
 d3.select('#fontFamily').on('change', updateProperties);
 d3.select('#fontSize').on('input', updateProperties);
 
+// Link Style - changes stroke style of link elements
+d3.select('#linkStyle').on('change', function () {
+    const style = d3.select(this).property('value');
+    if (state.selectedElement && state.selectedElement.type === 'link') {
+        state.selectedElement.linkStyle = style;
+        saveElementToFrame(state.selectedElement);
+        renderAllElements();
+        updateSelection();
+        saveHistory();
+        console.log(`Link style changed to: ${style}`);
+    }
+});
+
+// Arrow Heads - changes arrowhead position on arrow elements
+d3.select('#arrowStyle').on('change', function () {
+    const style = d3.select(this).property('value');
+    if (state.selectedElement && state.selectedElement.type === 'arrow') {
+        state.selectedElement.arrowHeads = style;
+        saveElementToFrame(state.selectedElement);
+        renderAllElements();
+        updateSelection();
+        saveHistory();
+        console.log(`Arrow heads changed to: ${style}`);
+    }
+});
+
 function updateRotation() {
     const rotation = +d3.select('#rotation').property('value');
     d3.select('#rotation').node().nextElementSibling.textContent = rotation + '°';
@@ -3235,6 +3293,7 @@ function showContextMenu(event, element) {
             el.type !== 'line' && el.type !== 'arrow' && el.type !== 'link'
         );
 
+    console.log(`Context menu: ${state.selectedElements.length} elements selected, canConnect=${canConnect}`);
     d3.select('#ctxConnect').style('display', canConnect ? 'block' : 'none');
 
     // Show Highlight option only for text elements
