@@ -362,6 +362,34 @@ select.range-input option {
     text-align: right;
 }
 
+/* ===== Flip Buttons ===== */
+.flip-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    color: var(--neutral-300);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.flip-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--primary-500);
+    color: var(--primary-400);
+}
+
+.flip-btn.active {
+    background: var(--primary-600);
+    border-color: var(--primary-500);
+    color: white;
+}
+
 /* ===== Buttons ===== */
 .frame-buttons {
     display: flex;
@@ -1017,7 +1045,39 @@ svg[data-tool="line"] {
     min-width: 60px;
 }
 
-.context-menu-divider {
+.menu-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: var(--spacing-xs) var(--spacing-md);
+    margin-top: var(--spacing-xs);
+}
+
+.effect-item {
+    cursor: pointer;
+    padding-left: var(--spacing-lg);
+}
+
+.effect-item:hover {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--primary-400);
+}
+
+.effect-item.active {
+    background: rgba(99, 102, 241, 0.25);
+    color: var(--primary-300);
+}
+
+.effect-item.active::after {
+    content: '✓';
+    margin-left: auto;
+    font-size: 12px;
+}
+
+.context-menu-divider,
+.menu-divider {
     height: 1px;
     background: rgba(255, 255, 255, 0.1);
     margin: var(--spacing-sm) 0;

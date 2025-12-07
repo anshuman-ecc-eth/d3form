@@ -199,12 +199,60 @@ function createPath(d, x = 0, y = 0) {
     };
 }
 
+// Helper to build transform string for an element
+function getTransformString(element, cx, cy) {
+    const transforms = [];
+    const rotation = element.rotation || 0;
+    const scale = element.scale || 1;
+    const skewX = element.skewX || 0;
+    const flipH = element.flipH ? -1 : 1;
+    const flipV = element.flipV ? -1 : 1;
+
+    if (rotation) transforms.push(`rotate(${rotation}, ${cx}, ${cy})`);
+    if (scale !== 1 || flipH !== 1 || flipV !== 1) {
+        transforms.push(`translate(${cx}, ${cy}) scale(${scale * flipH}, ${scale * flipV}) translate(${-cx}, ${-cy})`);
+    }
+    if (skewX) transforms.push(`skewX(${skewX})`);
+
+    return transforms.length > 0 ? transforms.join(' ') : null;
+}
+
+// Helper to get blur filter
+function getBlurFilter(element) {
+    const blur = element.blur || 0;
+    if (blur > 0) {
+        return `url(#blur-${blur})`;
+    }
+    return null;
+}
+
+// Ensure blur filter definitions exist
+function ensureBlurFilters() {
+    let defs = svg.select('defs');
+    if (defs.empty()) {
+        defs = svg.append('defs');
+    }
+    // Create blur filters 1-20
+    for (let i = 1; i <= 20; i++) {
+        if (defs.select(`#blur-${i}`).empty()) {
+            defs.append('filter')
+                .attr('id', `blur-${i}`)
+                .append('feGaussianBlur')
+                .attr('stdDeviation', i);
+        }
+    }
+}
+
 // ===== Rendering Functions =====
 function renderElement(element, selection) {
     const group = selection || mainGroup;
 
     switch (element.type) {
         case 'rectangle':
+            const rectCx = element.x + element.width / 2;
+            const rectCy = element.y + element.height / 2;
+            const rectTransform = getTransformString(element, rectCx, rectCy);
+            const rectBlur = getBlurFilter(element);
             return group.append('rect')
                 .attr('id', element.id)
                 .attr('x', element.x)
@@ -216,9 +264,13 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('rx', 8)
+                .attr('transform', rectTransform)
+                .attr('filter', rectBlur)
                 .style('pointer-events', 'all');
 
         case 'circle':
+            const circleTransform = getTransformString(element, element.cx, element.cy);
+            const circleBlur = getBlurFilter(element);
             return group.append('ellipse')
                 .attr('id', element.id)
                 .attr('cx', element.cx)
@@ -229,9 +281,15 @@ function renderElement(element, selection) {
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
+                .attr('transform', circleTransform)
+                .attr('filter', circleBlur)
                 .style('pointer-events', 'all');
 
         case 'triangle':
+            const triCx = element.x + element.width / 2;
+            const triCy = element.y + element.height / 2;
+            const triTransform = getTransformString(element, triCx, triCy);
+            const triBlur = getBlurFilter(element);
             return group.append('polygon')
                 .attr('id', element.id)
                 .attr('points', element.points)
@@ -239,9 +297,15 @@ function renderElement(element, selection) {
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
+                .attr('transform', triTransform)
+                .attr('filter', triBlur)
                 .style('pointer-events', 'all');
 
         case 'diamond':
+            const diamCx = element.x + element.width / 2;
+            const diamCy = element.y + element.height / 2;
+            const diamTransform = getTransformString(element, diamCx, diamCy);
+            const diamBlur = getBlurFilter(element);
             return group.append('polygon')
                 .attr('id', element.id)
                 .attr('points', element.points)
@@ -249,6 +313,8 @@ function renderElement(element, selection) {
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
+                .attr('transform', diamTransform)
+                .attr('filter', diamBlur)
                 .style('pointer-events', 'all');
 
         case 'line':
@@ -371,9 +437,15 @@ function renderElement(element, selection) {
                 .attr('id', element.id);
 
             // Add invisible background rect for easier clicking
-            // We'll estimate size based on text length and font size
             const estimatedWidth = (element.text || '').length * (element.fontSize || 16) * 0.6;
             const estimatedHeight = (element.fontSize || 16) * 1.2;
+            const textCx = element.x;
+            const textCy = element.y - estimatedHeight / 2;
+
+            // Apply rotation to the group
+            if (rotation) {
+                textGroup.attr('transform', `rotate(${rotation}, ${textCx}, ${textCy})`);
+            }
 
             textGroup.append('rect')
                 .attr('x', element.textAlign === 'middle' ? element.x - estimatedWidth / 2 : element.x)
@@ -401,6 +473,7 @@ function renderElement(element, selection) {
 }
 
 function renderAllElements() {
+    ensureBlurFilters();
     mainGroup.selectAll('*').remove();
     const elements = getCurrentFrameElements();
     elements.forEach(element => {
@@ -413,6 +486,19 @@ function renderAllElements() {
 
 // ===== Element Interactions =====
 function setupElementInteractions(selection, element) {
+    // Present mode: Add hover effects
+    if (state.mode === 'present' && element.hoverEffect) {
+        selection
+            .style('cursor', 'pointer')
+            .on('mouseenter', function () {
+                applyHoverEffect(element, d3.select(this), true);
+            })
+            .on('mouseleave', function () {
+                applyHoverEffect(element, d3.select(this), false);
+            });
+        return;
+    }
+
     if (state.mode !== 'edit') return;
 
     selection
@@ -444,8 +530,12 @@ function setupElementInteractions(selection, element) {
                 } else if (!state.selectedElements.some(e => e.id === element.id)) {
                     selectElement(element);
                 } else {
+                    // Element is already selected - ensure it's properly focused
                     state.selectedElement = element;
-                    if (state.selectedElements.length === 1) syncPropertiesFromElement(element);
+                    if (state.selectedElements.length === 1) {
+                        syncPropertiesFromElement(element);
+                        updateSelection(); // Ensure handles are shown
+                    }
                 }
 
                 startDrag(event, element);
@@ -734,7 +824,7 @@ function syncPropertiesFromElement(element) {
     }
 
     state.properties.strokeWidth = element.strokeWidth || 2;
-    state.properties.opacity = element.opacity || 1;
+    state.properties.rotation = element.rotation || 0;
 
     if (element.type === 'text') {
         state.properties.fontFamily = element.fontFamily || 'Inter';
@@ -751,12 +841,13 @@ function syncPropertiesFromElement(element) {
 
     d3.select('#strokeColor').property('value', state.properties.stroke);
     d3.select('#strokeWidth').property('value', state.properties.strokeWidth);
-    d3.select('#opacity').property('value', Math.round(state.properties.opacity * 100));
+    d3.select('#rotation').property('value', state.properties.rotation);
     d3.select('#fontFamily').property('value', state.properties.fontFamily);
     d3.select('#fontSize').property('value', state.properties.fontSize);
 
+    // Update value labels
     d3.select('#strokeWidth').node().nextElementSibling.textContent = state.properties.strokeWidth;
-    d3.select('#opacity').node().nextElementSibling.textContent = Math.round(state.properties.opacity * 100) + '%';
+    d3.select('#rotation').node().nextElementSibling.textContent = state.properties.rotation + '°';
     d3.select('#fontSize').node().nextElementSibling.textContent = state.properties.fontSize + 'px';
 }
 
@@ -1803,6 +1894,8 @@ function exitPresentMode() {
     d3.select('#toolbar').classed('hidden', false);
     d3.select('#presentControls').classed('hidden', true);
     svg.classed('select-mode', false);
+    // Re-render to clear Present mode event listeners and restore Edit mode interactions
+    renderAllElements();
 }
 
 function nextFrame() {
@@ -2025,8 +2118,13 @@ function createEndStateForDepartingElement(element) {
 }
 
 function animateElement(selection, fromEl, toEl, duration, ease) {
+    const fromRotation = fromEl.rotation || 0;
+    const toRotation = toEl.rotation || 0;
+
     switch (toEl.type) {
         case 'rectangle':
+            const rectCx = toEl.x + toEl.width / 2;
+            const rectCy = toEl.y + toEl.height / 2;
             selection.transition()
                 .duration(duration)
                 .ease(ease)
@@ -2037,7 +2135,13 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
                 .attr('fill', toEl.fill)
                 .attr('stroke', toEl.stroke)
                 .attr('stroke-width', toEl.strokeWidth)
-                .attr('opacity', toEl.opacity);
+                .attr('opacity', toEl.opacity)
+                .attrTween('transform', function () {
+                    return d3.interpolateString(
+                        `rotate(${fromRotation}, ${rectCx}, ${rectCy})`,
+                        `rotate(${toRotation}, ${rectCx}, ${rectCy})`
+                    );
+                });
             break;
 
         case 'circle':
@@ -2051,11 +2155,19 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
                 .attr('fill', toEl.fill)
                 .attr('stroke', toEl.stroke)
                 .attr('stroke-width', toEl.strokeWidth)
-                .attr('opacity', toEl.opacity);
+                .attr('opacity', toEl.opacity)
+                .attrTween('transform', function () {
+                    return d3.interpolateString(
+                        `rotate(${fromRotation}, ${toEl.cx}, ${toEl.cy})`,
+                        `rotate(${toRotation}, ${toEl.cx}, ${toEl.cy})`
+                    );
+                });
             break;
 
         case 'triangle':
         case 'diamond':
+            const polyCx = toEl.x + toEl.width / 2;
+            const polyCy = toEl.y + toEl.height / 2;
             selection.transition()
                 .duration(duration)
                 .ease(ease)
@@ -2063,7 +2175,13 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
                 .attr('fill', toEl.fill)
                 .attr('stroke', toEl.stroke)
                 .attr('stroke-width', toEl.strokeWidth)
-                .attr('opacity', toEl.opacity);
+                .attr('opacity', toEl.opacity)
+                .attrTween('transform', function () {
+                    return d3.interpolateString(
+                        `rotate(${fromRotation}, ${polyCx}, ${polyCy})`,
+                        `rotate(${toRotation}, ${polyCx}, ${polyCy})`
+                    );
+                });
             break;
 
         case 'line':
@@ -2127,38 +2245,8 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
             break;
 
         case 'text':
-            // Text is a group with rect (hit area) and text element
-            const textWidth = (toEl.text || '').length * (toEl.fontSize || 16) * 0.6;
-            const textHeight = (toEl.fontSize || 16) * 1.2;
-            const textX = toEl.textAlign === 'middle' ? toEl.x - textWidth / 2 : toEl.x;
-            const textY = toEl.y - textHeight * 0.8;
-
-            selection.select('rect')
-                .transition()
-                .duration(duration)
-                .ease(ease)
-                .attr('x', textX)
-                .attr('y', textY)
-                .attr('width', textWidth)
-                .attr('height', textHeight);
-
-            selection.select('text')
-                .transition()
-                .duration(duration)
-                .ease(ease)
-                .attr('x', toEl.x)
-                .attr('y', toEl.y)
-                .attr('fill', toEl.fill)
-                .attr('font-size', toEl.fontSize)
-                .attr('opacity', toEl.opacity)
-                .tween('text', function () {
-                    const that = this;
-                    return function () {
-                        if (that.textContent !== toEl.text) {
-                            that.textContent = toEl.text;
-                        }
-                    };
-                });
+            // Word-level text animation using GSAP
+            animateTextWordLevel(selection, fromEl, toEl, duration);
             break;
 
         case 'link':
@@ -2216,17 +2304,140 @@ function updateToolSelection() {
     }
 }
 
+// ===== Word-Level Text Animation with GSAP =====
+function animateTextWordLevel(selection, fromEl, toEl, duration) {
+    const fromText = fromEl.text || '';
+    const toText = toEl.text || '';
+    const fontSize = toEl.fontSize || 16;
+    const fontFamily = toEl.fontFamily || 'Inter, sans-serif';
+
+    // Use much longer duration for smoother text animation
+    const textDuration = Math.max(duration * 1.5, 1000);
+    const durationSec = textDuration / 1000;
+
+    // Get DOM nodes
+    const textGroup = selection.node();
+    const rect = selection.select('rect');
+    const textEl = selection.select('text');
+
+    // Calculate dimensions
+    const textWidth = toText.length * fontSize * 0.6;
+    const textHeight = fontSize * 1.2;
+    const textX = toEl.textAlign === 'middle' ? toEl.x - textWidth / 2 : toEl.x;
+    const textY = toEl.y - textHeight * 0.8;
+
+    // Check if text content changed
+    const textChanged = fromText !== toText;
+
+    // Check if position changed
+    const positionChanged = fromEl.x !== toEl.x || fromEl.y !== toEl.y;
+
+    if (typeof gsap !== 'undefined') {
+        // Animate hit area smoothly with GSAP
+        gsap.to(rect.node(), {
+            attr: { x: textX, y: textY, width: textWidth, height: textHeight },
+            duration: durationSec,
+            ease: 'sine.inOut'  // Very smooth sine easing
+        });
+
+        const textNode = textEl.node();
+
+        // Smooth position animation
+        gsap.to(textNode, {
+            attr: { x: toEl.x, y: toEl.y },
+            duration: durationSec,
+            ease: 'sine.inOut'
+        });
+
+        // Handle text content change with word animation
+        if (textChanged) {
+            const fromWords = fromText.split(/\s+/).filter(w => w);
+            const toWords = toText.split(/\s+/).filter(w => w);
+            const { added } = diffWords(fromWords, toWords);
+
+            // If words changed, rebuild with tspans for word-level animation
+            textEl.text('');
+
+            toWords.forEach((word, i) => {
+                const isNew = added.includes(i);
+                const tspan = textEl.append('tspan')
+                    .text((i === 0 ? '' : ' ') + word);
+
+                if (isNew) {
+                    // Fade in new words with staggered delay
+                    tspan.style('opacity', 0);
+                    gsap.to(tspan.node(), {
+                        opacity: 1,
+                        duration: durationSec * 0.6,
+                        ease: 'power1.in',  // Gentle ease-in
+                        delay: 0.15 + (i * 0.05)  // Staggered delay for each word
+                    });
+                }
+            });
+        }
+    } else {
+        // D3 fallback for position animation
+        rect.transition()
+            .duration(textDuration)
+            .ease(d3.easeCubicInOut)
+            .attr('x', textX)
+            .attr('y', textY)
+            .attr('width', textWidth)
+            .attr('height', textHeight);
+
+        textEl.transition()
+            .duration(textDuration)
+            .ease(d3.easeCubicInOut)
+            .attr('x', toEl.x)
+            .attr('y', toEl.y)
+            .attr('fill', toEl.fill)
+            .attr('font-size', fontSize);
+
+        // Update text content at midpoint
+        if (textChanged) {
+            setTimeout(() => {
+                textEl.text(toText);
+            }, textDuration / 2);
+        }
+    }
+}
+
+// Diff words between two arrays
+function diffWords(fromWords, toWords) {
+    const added = [];
+    const removed = [];
+    const common = [];
+
+    // Simple LCS-based diff
+    const toSet = new Set(toWords);
+    const fromSet = new Set(fromWords);
+
+    toWords.forEach((word, i) => {
+        if (!fromSet.has(word)) {
+            added.push(i);
+        } else {
+            common.push(i);
+        }
+    });
+
+    fromWords.forEach((word, i) => {
+        if (!toSet.has(word)) {
+            removed.push(i);
+        }
+    });
+
+    return { added, removed, common };
+}
+
 // ===== Property Updates =====
 function updateProperties() {
     state.properties.fill = d3.select('#fillColor').property('value');
     state.properties.stroke = d3.select('#strokeColor').property('value');
     state.properties.strokeWidth = +d3.select('#strokeWidth').property('value');
-    state.properties.opacity = +d3.select('#opacity').property('value') / 100;
     state.properties.fontFamily = d3.select('#fontFamily').property('value');
     state.properties.fontSize = +d3.select('#fontSize').property('value');
 
     d3.select('#strokeWidth').node().nextElementSibling.textContent = state.properties.strokeWidth;
-    d3.select('#opacity').node().nextElementSibling.textContent = Math.round(state.properties.opacity * 100) + '%';
     d3.select('#fontSize').node().nextElementSibling.textContent = state.properties.fontSize + 'px';
 
     // Apply to selected element if one is selected
@@ -2234,7 +2445,6 @@ function updateProperties() {
         state.selectedElement.fill = state.properties.fill;
         state.selectedElement.stroke = state.properties.stroke;
         state.selectedElement.strokeWidth = state.properties.strokeWidth;
-        state.selectedElement.opacity = state.properties.opacity;
 
         if (state.selectedElement.type === 'text') {
             state.selectedElement.fontFamily = state.properties.fontFamily;
@@ -2243,6 +2453,7 @@ function updateProperties() {
 
         saveElementToFrame(state.selectedElement);
         renderAllElements();
+        updateSelection();
         saveHistory();
     }
 }
@@ -2273,9 +2484,22 @@ d3.select('#prevFrameBtn').on('click', prevFrame);
 d3.select('#fillColor').on('input', updateProperties);
 d3.select('#strokeColor').on('input', updateProperties);
 d3.select('#strokeWidth').on('input', updateProperties);
-d3.select('#opacity').on('input', updateProperties);
+d3.select('#rotation').on('input', updateRotation);
 d3.select('#fontFamily').on('change', updateProperties);
 d3.select('#fontSize').on('input', updateProperties);
+
+function updateRotation() {
+    const rotation = +d3.select('#rotation').property('value');
+    d3.select('#rotation').node().nextElementSibling.textContent = rotation + '°';
+
+    if (state.selectedElement) {
+        state.selectedElement.rotation = rotation;
+        saveElementToFrame(state.selectedElement);
+        renderAllElements();
+        updateSelection();
+        saveHistory();
+    }
+}
 
 // ===== Context Menu =====
 function showContextMenu(event, element) {
@@ -3012,6 +3236,14 @@ function showContextMenu(event, element) {
         );
 
     d3.select('#ctxConnect').style('display', canConnect ? 'block' : 'none');
+
+    // Show Highlight option only for text elements
+    d3.select('.effect-item[data-effect="highlight"]').style('display', element.type === 'text' ? 'block' : 'none');
+
+    // Highlight current hover effect
+    const currentEffect = element.hoverEffect || 'none';
+    d3.selectAll('.effect-item').classed('active', false);
+    d3.select(`.effect-item[data-effect="${currentEffect}"]`).classed('active', true);
 }
 
 function hideContextMenu() {
@@ -3101,12 +3333,197 @@ d3.select('#ctxDelete').on('click', () => {
     hideContextMenu();
 });
 
+// Effect item click handlers
+d3.selectAll('.effect-item').on('click', function () {
+    const effect = d3.select(this).attr('data-effect');
+    const id = d3.select('#contextMenu').attr('data-element-id');
+    const elements = getCurrentFrameElements();
+    const element = elements.find(el => el.id === id);
+
+    if (element) {
+        if (effect === 'highlight' && element.type === 'text') {
+            // Prompt user to enter the portion of text to highlight
+            const highlightText = prompt(
+                `Enter the portion of text to highlight (from: "${element.text}"):`,
+                element.highlightText || element.text
+            );
+            if (highlightText !== null) {
+                element.hoverEffect = 'highlight';
+                element.highlightText = highlightText;
+                console.log(`🔦 Set highlight: "${highlightText}" on ${element.id}`);
+            }
+        } else {
+            element.hoverEffect = effect === 'none' ? null : effect;
+            element.highlightText = null; // Clear highlight text for other effects
+            console.log(`✨ Set hover effect: ${effect} on ${element.id}`);
+        }
+        saveHistory();
+    }
+
+    // Update active state on menu items
+    d3.selectAll('.effect-item').classed('active', false);
+    d3.select(this).classed('active', true);
+
+    hideContextMenu();
+});
+
 // Hide menu on global click
 d3.select('body').on('click.contextmenu', () => {
     hideContextMenu();
 });
 
-// ===== Helper Functions =====
+// ===== Hover Effects for Present Mode =====
+function applyHoverEffect(element, selection, entering) {
+    const effect = element.hoverEffect;
+    if (!effect) return;
+
+    const duration = 300;
+    const ease = d3.easeCubicOut;
+    let cx, cy;
+
+    // Get element center
+    if (element.type === 'circle') {
+        cx = element.cx;
+        cy = element.cy;
+    } else if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') {
+        cx = (element.x1 + element.x2) / 2;
+        cy = (element.y1 + element.y2) / 2;
+    } else {
+        cx = element.x + (element.width || 0) / 2;
+        cy = element.y + (element.height || 0) / 2;
+    }
+
+    if (entering) {
+        switch (effect) {
+            case 'inflate':
+                selection.transition().duration(duration).ease(ease)
+                    .attr('transform', `translate(${cx}, ${cy}) scale(1.3) translate(${-cx}, ${-cy})`);
+                break;
+            case 'dissolve':
+                selection.transition().duration(duration).ease(ease)
+                    .attr('opacity', 0.2)
+                    .attr('filter', 'url(#blur-8)');
+                break;
+            case 'highlight':
+                // Text-specific: fade out non-highlighted words
+                if (element.type === 'text' && element.highlightText) {
+                    applyTextHighlight(selection, element, true, duration);
+                }
+                break;
+        }
+    } else {
+        // Reset on mouse leave
+        selection.interrupt();
+
+        if (effect === 'highlight' && element.type === 'text') {
+            applyTextHighlight(selection, element, false, duration);
+        } else {
+            selection.transition().duration(duration).ease(ease)
+                .attr('transform', getTransformString(element, cx, cy))
+                .attr('opacity', element.opacity || 1)
+                .attr('filter', getBlurFilter(element));
+        }
+    }
+}
+
+// Apply highlight effect to text (fade out non-highlighted words)
+function applyTextHighlight(selection, element, entering, duration) {
+    // For text groups, find the text element
+    let textEl = selection.select('text');
+    if (textEl.empty()) {
+        // Maybe selection IS the text element
+        if (selection.node().tagName === 'text') {
+            textEl = selection;
+        } else {
+            console.log('Highlight: Could not find text element');
+            return;
+        }
+    }
+
+    const fullText = element.text || '';
+    const highlightText = element.highlightText || '';
+
+    console.log(`Highlight effect: entering=${entering}, highlight="${highlightText}", fullText="${fullText}"`);
+
+    if (entering) {
+        // Split text into highlighted and non-highlighted parts
+        const highlightStart = fullText.indexOf(highlightText);
+        if (highlightStart === -1) {
+            console.log('Highlight text not found in full text');
+            return;
+        }
+
+        const before = fullText.substring(0, highlightStart);
+        const highlighted = highlightText;
+        const after = fullText.substring(highlightStart + highlightText.length);
+
+        // Clear and rebuild with tspans
+        textEl.text('');
+
+        if (before) {
+            textEl.append('tspan')
+                .attr('class', 'fade-text')
+                .text(before)
+                .style('opacity', 1);
+        }
+
+        textEl.append('tspan')
+            .attr('class', 'highlight-text')
+            .text(highlighted)
+            .style('opacity', 1)
+            .style('font-weight', '700');
+
+        if (after) {
+            textEl.append('tspan')
+                .attr('class', 'fade-text')
+                .text(after)
+                .style('opacity', 1);
+        }
+
+        // Animate fade-text to low opacity
+        if (typeof gsap !== 'undefined') {
+            gsap.to(textEl.selectAll('.fade-text').nodes(), {
+                opacity: 0.15,
+                duration: duration / 1000,
+                ease: 'power2.out'
+            });
+        } else {
+            textEl.selectAll('.fade-text')
+                .transition()
+                .duration(duration)
+                .style('opacity', 0.15);
+        }
+    } else {
+        // Restore full text
+        if (typeof gsap !== 'undefined') {
+            gsap.to(textEl.selectAll('.fade-text').nodes(), {
+                opacity: 1,
+                duration: duration / 1000,
+                ease: 'power2.out',
+                onComplete: () => {
+                    textEl.text(fullText);
+                }
+            });
+        } else {
+            textEl.selectAll('.fade-text')
+                .transition()
+                .duration(duration)
+                .style('opacity', 1)
+                .on('end', () => {
+                    textEl.text(fullText);
+                });
+        }
+    }
+}
+
+function doPulse(selection, cx, cy, count) {
+    if (count >= 2) return;
+    selection.transition().duration(200).ease(d3.easeSinInOut)
+        .attr('transform', `translate(${cx}, ${cy}) scale(1.1) translate(${-cx}, ${-cy})`)
+        .transition().duration(200)
+        .attr('transform', null)
+        .on('end', () => doPulse(selection, cx, cy, count + 1));
+}
 
 function renderSelectionBox() {
     let box = d3.select('#selectionBox');

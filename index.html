@@ -7,7 +7,7 @@
     <meta name="description"
         content="d3form - A beautiful no-code diagramming platform with smooth animated presentations">
     <title>d3form - Interactive Diagramming & Presentations</title>
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -155,9 +155,9 @@
                         <span class="range-value">2</span>
                     </div>
                     <div class="property-group">
-                        <label class="property-label">Opacity</label>
-                        <input type="range" id="opacity" class="range-input" min="0" max="100" value="100">
-                        <span class="range-value">100%</span>
+                        <label class="property-label">Rotation</label>
+                        <input type="range" id="rotation" class="range-input" min="0" max="360" value="0">
+                        <span class="range-value">0°</span>
                     </div>
                     <div class="property-group">
                         <label class="property-label">Font Family</label>
@@ -249,18 +249,25 @@
     </div>
 
     <div id="contextMenu" class="context-menu hidden">
-        <div class="menu-item" id="ctxCopy">Copy</div>
-        <div class="menu-item" id="ctxPaste">Paste</div>
+        <div class="menu-item" id="ctxCopy">📋 Copy</div>
+        <div class="menu-item" id="ctxPaste">📄 Paste</div>
         <div class="menu-divider"></div>
         <div class="menu-item" id="ctxConnect" style="display: none;">🔗 Connect</div>
-        <div class="menu-item" id="ctxChangeFill">Change Fill Color</div>
-        <div class="menu-item" id="ctxChangeStroke">Change Stroke Color</div>
+        <div class="menu-item" id="ctxChangeFill">🎨 Change Fill</div>
+        <div class="menu-item" id="ctxChangeStroke">✏️ Change Stroke</div>
         <div class="menu-divider"></div>
-        <div class="menu-item delete" id="ctxDelete">Delete Element</div>
+        <div class="menu-label">Hover Effects (Present Mode)</div>
+        <div class="menu-item effect-item" data-effect="none">❌ None</div>
+        <div class="menu-item effect-item" data-effect="inflate">🔼 Inflate</div>
+        <div class="menu-item effect-item" data-effect="dissolve">💨 Dissolve</div>
+        <div class="menu-item effect-item" data-effect="highlight" id="ctxHighlight">🔦 Highlight Text</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item delete" id="ctxDelete">🗑️ Delete</div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=22"></script>
 </body>
 
 </html>
