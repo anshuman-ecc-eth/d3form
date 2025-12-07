@@ -2,7 +2,7 @@
 
 **[Launch App →](https://anshuman-ecc-eth.github.io/d3form/)**
 
-A no-code diagramming tool with smooth animated presentations, built with D3.js and GSAP.
+A no-code diagramming tool with smooth animated presentations, built with D3.js.
 
 ## ✨ Key Features
 
