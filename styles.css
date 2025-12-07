@@ -117,6 +117,7 @@ body {
 
 .header-right {
     justify-content: flex-end;
+    gap: var(--spacing-sm);
 }
 
 .logo {
@@ -125,23 +126,14 @@ body {
     gap: var(--spacing-sm);
     font-size: var(--font-size-xl);
     font-weight: 700;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
-.logo-icon {
-    color: var(--primary-600);
-    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5));
-}
-
-/* ===== Mode Toggle ===== */
+/* ===== Mode Toggle Buttons ===== */
 .mode-toggle {
     display: flex;
     gap: var(--spacing-xs);
+    padding: 4px;
     background: rgba(15, 23, 42, 0.6);
-    padding: var(--spacing-xs);
     border-radius: var(--radius-lg);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -163,14 +155,19 @@ body {
 }
 
 .mode-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--neutral-200);
 }
 
 .mode-btn.active {
     background: var(--gradient-primary);
     color: white;
-    box-shadow: var(--shadow-glow);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.mode-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* ===== Icon Buttons ===== */
@@ -304,6 +301,7 @@ body {
     border-radius: var(--radius-sm);
     outline: none;
     -webkit-appearance: none;
+    appearance: none;
 }
 
 .range-input::-webkit-slider-thumb {
@@ -514,8 +512,41 @@ select.range-input option {
     cursor: crosshair;
 }
 
-.canvas.select-mode {
-    cursor: default;
+/* Custom cursors for each tool */
+.canvas[data-tool="select"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" stroke="white" stroke-width="2" fill="black" stroke-linecap="round" stroke-linejoin="round"/></svg>') 3 3, default;
+}
+
+.canvas[data-tool="span"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 3 L3 8 M3 3 L8 3 M21 3 L21 8 M21 3 L16 3 M3 21 L3 16 M3 21 L8 21 M21 21 L21 16 M21 21 L16 21" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="8" x2="12" y2="16" stroke="white" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="white" stroke-width="1.5"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="rectangle"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="white" stroke-width="2" fill="rgba(99, 102, 241, 0.3)"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="circle"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="rgba(99, 102, 241, 0.3)"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="triangle"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4 L21 20 L3 20 Z" stroke="white" stroke-width="2" fill="rgba(99, 102, 241, 0.3)" stroke-linejoin="round"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="diamond"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3 L21 12 L12 21 L3 12 Z" stroke="white" stroke-width="2" fill="rgba(99, 102, 241, 0.3)" stroke-linejoin="round"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="line"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><line x1="5" y1="19" x2="19" y2="5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="arrow"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/><polyline points="12 5 19 12 12 19" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, crosshair;
+}
+
+.canvas[data-tool="text"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><polyline points="4 7 4 4 20 4 20 7" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="9" y1="20" x2="15" y2="20" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="4" x2="12" y2="20" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>') 12 12, text;
 }
 
 /* ===== Presentation Controls ===== */
@@ -597,13 +628,11 @@ select.range-input option {
     transition: background var(--transition-base);
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
 /* ===== Selection Styles ===== */
 .element-selected {
-    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8)) drop-shadow(0 0 16px rgba(99, 102, 241, 0.6));
+    /* Removing outline as it creates ugly boxes around non-rectangular shapes. 
+       The glow is sufficient and more aesthetic. */
 }
 
 .selection-box {
@@ -611,6 +640,99 @@ select.range-input option {
     stroke: var(--primary-600);
     stroke-width: 2;
     stroke-dasharray: 5, 5;
+}
+
+/* ===== Context Menu ===== */
+.context-menu {
+    position: fixed;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-sm);
+    min-width: 200px;
+    box-shadow: var(--shadow-xl);
+    z-index: 10000;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.context-menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu-action {
+    color: var(--neutral-200);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.context-menu-action:hover {
+    color: var(--neutral-100);
+}
+
+.context-menu-danger {
+    color: #ef4444;
+}
+
+.context-menu-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.context-menu-label {
+    font-size: var(--font-size-sm);
+    color: var(--neutral-300);
+}
+
+.context-color-input {
+    width: 32px;
+    height: 24px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: transparent;
+}
+
+.context-range-input {
+    width: 80px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.context-range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--primary-600);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.context-value {
+    font-size: var(--font-size-xs);
+    color: var(--neutral-400);
+    min-width: 30px;
+    text-align: right;
+}
+
+.context-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: var(--spacing-xs) 0;
 }
 
 /* ===== Animations ===== */
@@ -656,8 +778,6 @@ select.range-input option {
         font-size: var(--font-size-lg);
     }
 }
-
-   
 
 /* ===== Light Mode Theme ===== */
 /* Light Mode Theme */
@@ -993,4 +1113,31 @@ svg[data-tool="line"] {
 
 :root.light-mode .context-value {
     color: var(--neutral-600);
+}
+
+/* ===== Connector Handles ===== */
+.connector-handle {
+    transition: transform 0.15s ease, r 0.15s ease;
+}
+
+.connector-handle:hover {
+    transform: scale(1.3);
+}
+
+.snap-indicator {
+    animation: pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        r: 10;
+    }
+
+    50% {
+        opacity: 0.6;
+        r: 14;
+    }
 }

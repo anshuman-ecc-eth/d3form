@@ -15,8 +15,8 @@ const state = {
     startPoint: null,
     tempElement: null,
     properties: {
-        fill: '#6366f1',
-        stroke: '#1e293b',
+        fill: 'none',
+        stroke: '#ffffff',
         strokeWidth: 2,
         opacity: 1,
         fontFamily: 'Inter',
@@ -35,7 +35,14 @@ const state = {
     },
     history: [],
     historyIndex: -1,
-    clipboard: null
+    clipboard: null,
+    // Connector drawing state
+    isDrawingConnector: false,
+    connectorStart: null,
+    connectorSourceElement: null,
+    tempConnectorArrow: null,
+    // Connector Mode (toggled with 'N' key)
+    connectorMode: false
 };
 
 // ===== D3 Setup =====
@@ -109,10 +116,55 @@ function createCircle(x1, y1, x2, y2) {
     };
 }
 
+function createTriangle(x1, y1, x2, y2) {
+    const x = Math.min(x1, x2);
+    const y = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+
+    // Triangle points: top center, bottom right, bottom left
+    const points = `${x + width / 2},${y} ${x + width},${y + height} ${x},${y + height}`;
+
+    return {
+        id: generateId(),
+        type: 'triangle',
+        x, y, width, height,
+        points,
+        ...state.properties
+    };
+}
+
+function createDiamond(x1, y1, x2, y2) {
+    const x = Math.min(x1, x2);
+    const y = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+
+    // Diamond points: top, right, bottom, left
+    const points = `${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`;
+
+    return {
+        id: generateId(),
+        type: 'diamond',
+        x, y, width, height,
+        points,
+        ...state.properties
+    };
+}
+
 function createLine(x1, y1, x2, y2) {
     return {
         id: generateId(),
         type: 'line',
+        x1, y1, x2, y2,
+        ...state.properties
+    };
+}
+
+function createLink(x1, y1, x2, y2) {
+    return {
+        id: generateId(),
+        type: 'link',
         x1, y1, x2, y2,
         ...state.properties
     };
@@ -164,7 +216,7 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('rx', 8)
-                .style('cursor', 'move');
+                .style('pointer-events', 'all');
 
         case 'circle':
             return group.append('ellipse')
@@ -177,11 +229,44 @@ function renderElement(element, selection) {
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
-                .style('cursor', 'move');
+                .style('pointer-events', 'all');
+
+        case 'triangle':
+            return group.append('polygon')
+                .attr('id', element.id)
+                .attr('points', element.points)
+                .attr('fill', element.fill)
+                .attr('stroke', element.stroke)
+                .attr('stroke-width', element.strokeWidth)
+                .attr('opacity', element.opacity)
+                .style('pointer-events', 'all');
+
+        case 'diamond':
+            return group.append('polygon')
+                .attr('id', element.id)
+                .attr('points', element.points)
+                .attr('fill', element.fill)
+                .attr('stroke', element.stroke)
+                .attr('stroke-width', element.strokeWidth)
+                .attr('opacity', element.opacity)
+                .style('pointer-events', 'all');
 
         case 'line':
-            return group.append('line')
-                .attr('id', element.id)
+            const lineGroup = group.append('g')
+                .attr('id', element.id);
+
+            // Invisible hit area for easier clicking
+            lineGroup.append('line')
+                .attr('x1', element.x1)
+                .attr('y1', element.y1)
+                .attr('x2', element.x2)
+                .attr('y2', element.y2)
+                .attr('stroke', 'transparent')
+                .attr('stroke-width', 20)
+                .style('pointer-events', 'all');
+
+            // Visible line
+            lineGroup.append('line')
                 .attr('x1', element.x1)
                 .attr('y1', element.y1)
                 .attr('x2', element.x2)
@@ -190,13 +275,54 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('stroke-linecap', 'round')
-                .style('cursor', 'move');
+                .style('pointer-events', 'none');
+
+            return lineGroup;
+
+        case 'link':
+            const linkGroup = group.append('g')
+                .attr('id', element.id);
+
+            // Invisible hit area
+            linkGroup.append('line')
+                .attr('x1', element.x1)
+                .attr('y1', element.y1)
+                .attr('x2', element.x2)
+                .attr('y2', element.y2)
+                .attr('stroke', 'transparent')
+                .attr('stroke-width', 20)
+                .style('cursor', 'pointer')
+                .style('pointer-events', 'all');
+
+            // Visible link line
+            linkGroup.append('line')
+                .attr('x1', element.x1)
+                .attr('y1', element.y1)
+                .attr('x2', element.x2)
+                .attr('y2', element.y2)
+                .attr('stroke', element.stroke)
+                .attr('stroke-width', element.strokeWidth)
+                .attr('opacity', element.opacity)
+                .attr('stroke-linecap', 'round')
+                .style('pointer-events', 'none');
+
+            return linkGroup;
 
         case 'arrow':
             const arrowGroup = group.append('g')
-                .attr('id', element.id)
-                .style('cursor', 'move');
+                .attr('id', element.id);
 
+            // Invisible hit area for easier clicking
+            arrowGroup.append('line')
+                .attr('x1', element.x1)
+                .attr('y1', element.y1)
+                .attr('x2', element.x2)
+                .attr('y2', element.y2)
+                .attr('stroke', 'transparent')
+                .attr('stroke-width', 20)
+                .style('pointer-events', 'all');
+
+            // Visible arrow line
             arrowGroup.append('line')
                 .attr('x1', element.x1)
                 .attr('y1', element.y1)
@@ -205,7 +331,8 @@ function renderElement(element, selection) {
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
-                .attr('stroke-linecap', 'round');
+                .attr('stroke-linecap', 'round')
+                .style('pointer-events', 'none');
 
             // Arrow head
             const angle = Math.atan2(element.y2 - element.y1, element.x2 - element.x1);
@@ -215,14 +342,14 @@ function renderElement(element, selection) {
                 .attr('points', `0,0 -${arrowSize},-${arrowSize / 2} -${arrowSize},${arrowSize / 2}`)
                 .attr('fill', element.stroke)
                 .attr('opacity', element.opacity)
-                .attr('transform', `translate(${element.x2},${element.y2}) rotate(${angle * 180 / Math.PI})`);
+                .attr('transform', `translate(${element.x2},${element.y2}) rotate(${angle * 180 / Math.PI})`)
+                .style('pointer-events', 'none');
 
             return arrowGroup;
 
         case 'group':
             const g = group.append('g')
-                .attr('id', element.id)
-                .style('cursor', 'move');
+                .attr('id', element.id);
 
             element.children.forEach(child => {
                 renderElement(child, g);
@@ -237,12 +364,26 @@ function renderElement(element, selection) {
                 .attr('fill', element.fill)
                 .attr('stroke', element.stroke)
                 .attr('stroke-width', element.strokeWidth)
-                .attr('opacity', element.opacity)
-                .style('cursor', 'move');
+                .attr('opacity', element.opacity);
 
         case 'text':
-            return group.append('text')
-                .attr('id', element.id)
+            const textGroup = group.append('g')
+                .attr('id', element.id);
+
+            // Add invisible background rect for easier clicking
+            // We'll estimate size based on text length and font size
+            const estimatedWidth = (element.text || '').length * (element.fontSize || 16) * 0.6;
+            const estimatedHeight = (element.fontSize || 16) * 1.2;
+
+            textGroup.append('rect')
+                .attr('x', element.textAlign === 'middle' ? element.x - estimatedWidth / 2 : element.x)
+                .attr('y', element.y - estimatedHeight * 0.8)
+                .attr('width', estimatedWidth)
+                .attr('height', estimatedHeight)
+                .attr('fill', 'transparent')
+                .style('pointer-events', 'all');
+
+            textGroup.append('text')
                 .attr('x', element.x)
                 .attr('y', element.y)
                 .attr('fill', element.fill)
@@ -250,8 +391,12 @@ function renderElement(element, selection) {
                 .attr('font-size', element.fontSize)
                 .attr('font-family', element.fontFamily || 'Inter, sans-serif')
                 .attr('font-weight', '500')
-                .style('cursor', 'move')
-                .text(element.text);
+                .attr('text-anchor', element.textAlign || 'start')
+                .attr('dominant-baseline', element.textAlign === 'middle' ? 'middle' : 'auto')
+                .text(element.text)
+                .style('pointer-events', 'none');
+
+            return textGroup;
     }
 }
 
@@ -272,11 +417,30 @@ function setupElementInteractions(selection, element) {
 
     selection
         .on('mousedown', function (event) {
+            // 1. Global Resize Check (Priority)
+            const [mx, my] = d3.pointer(event, svg.node());
+            const pos = { x: mx, y: my };
+            const handle = getResizeHandle(element, pos);
+
+            if (handle) {
+                event.stopPropagation();
+                if (!state.selectedElements.some(e => e.id === element.id)) {
+                    selectElement(element);
+                }
+                state.isResizing = true;
+                state.resizeHandle = handle;
+                state.startPoint = pos;
+                state.initialElement = { ...element };
+                return;
+            }
+
+            // 2. Select/Drag Logic
             if (state.currentTool === 'select' || state.currentTool === 'span') {
                 event.stopPropagation();
 
-                if (event.shiftKey) {
-                    selectElement(element, true);
+                // Ctrl+Click or Shift+Click for multi-selection
+                if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                    selectElement(element, true); // Toggle selection
                 } else if (!state.selectedElements.some(e => e.id === element.id)) {
                     selectElement(element);
                 } else {
@@ -287,17 +451,6 @@ function setupElementInteractions(selection, element) {
                 startDrag(event, element);
             }
         })
-        .on('contextmenu', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            // Select element if not already selected
-            if (!state.selectedElements.some(e => e.id === element.id)) {
-                selectElement(element);
-            }
-
-            showContextMenu(event, element);
-        })
         .on('dblclick', function (event) {
             if (element.type === 'text') {
                 event.stopPropagation();
@@ -305,16 +458,228 @@ function setupElementInteractions(selection, element) {
             }
         })
         .on('contextmenu', function (event) {
-            if (state.mode === 'edit') {
-                event.preventDefault();
-                event.stopPropagation();
+            event.preventDefault();
+            event.stopPropagation();
 
-                if (!state.selectedElements.some(e => e.id === element.id)) {
-                    selectElement(element);
-                }
-                showContextMenu(event, element);
+            if (!state.selectedElements.some(e => e.id === element.id)) {
+                selectElement(element);
             }
+            showContextMenu(event, element);
         });
+}
+
+// ===== Connector Handles =====
+function getConnectorPoints(element) {
+    // Returns array of {x, y, position} for connector anchors
+    const points = [];
+    const margin = 15; // Offset handles to prevent overlap with resize handles
+
+    switch (element.type) {
+        case 'rectangle':
+        case 'triangle':
+        case 'diamond':
+            const cx = element.x + element.width / 2;
+            const cy = element.y + element.height / 2;
+            points.push({ x: cx, y: element.y - margin, position: 'top', elementId: element.id });
+            points.push({ x: element.x + element.width + margin, y: cy, position: 'right', elementId: element.id });
+            points.push({ x: cx, y: element.y + element.height + margin, position: 'bottom', elementId: element.id });
+            points.push({ x: element.x - margin, y: cy, position: 'left', elementId: element.id });
+            break;
+        case 'circle':
+            points.push({ x: element.cx, y: element.cy - element.ry - margin, position: 'top', elementId: element.id });
+            points.push({ x: element.cx + element.rx + margin, y: element.cy, position: 'right', elementId: element.id });
+            points.push({ x: element.cx, y: element.cy + element.ry + margin, position: 'bottom', elementId: element.id });
+            points.push({ x: element.cx - element.rx - margin, y: element.cy, position: 'left', elementId: element.id });
+            break;
+        case 'text':
+            const tw = (element.text || '').length * (element.fontSize || 16) * 0.6;
+            const th = (element.fontSize || 16) * 1.2;
+            const tx = element.textAlign === 'middle' ? element.x - tw / 2 : element.x;
+            const ty = element.y - th * 0.8;
+            const tcx = tx + tw / 2;
+            const tcy = ty + th / 2;
+            points.push({ x: tcx, y: ty - margin, position: 'top', elementId: element.id });
+            points.push({ x: tx + tw + margin, y: tcy, position: 'right', elementId: element.id });
+            points.push({ x: tcx, y: ty + th + margin, position: 'bottom', elementId: element.id });
+            points.push({ x: tx - margin, y: tcy, position: 'left', elementId: element.id });
+            break;
+    }
+    return points;
+}
+
+function showConnectorHandles(element) {
+    hideConnectorHandles(); // Clear any existing
+
+    const points = getConnectorPoints(element);
+    if (points.length === 0) return;
+
+    const handleGroup = mainGroup.append('g')
+        .attr('class', 'connector-handles')
+        .attr('data-element-id', element.id);
+
+    points.forEach(point => {
+        handleGroup.append('circle')
+            .attr('class', 'connector-handle')
+            .attr('cx', point.x)
+            .attr('cy', point.y)
+            .attr('r', 6)
+            .attr('fill', '#6366f1')
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 2)
+            .style('cursor', 'crosshair')
+            .style('pointer-events', 'all')
+            .on('mousedown', function (event) {
+                event.stopPropagation();
+                startConnectorDraw(event, point, element);
+            });
+    });
+}
+
+function hideConnectorHandles() {
+    mainGroup.selectAll('.connector-handles').remove();
+}
+
+function showAllConnectorHandles() {
+    hideConnectorHandles(); // Clear existing
+
+    const elements = getCurrentFrameElements();
+    elements.forEach(element => {
+        // Skip line/arrow/link elements
+        if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') return;
+
+        const points = getConnectorPoints(element);
+        if (points.length === 0) return;
+
+        const handleGroup = mainGroup.append('g')
+            .attr('class', 'connector-handles')
+            .attr('data-element-id', element.id);
+
+        points.forEach(point => {
+            handleGroup.append('circle')
+                .attr('class', 'connector-handle')
+                .attr('cx', point.x)
+                .attr('cy', point.y)
+                .attr('r', 6)
+                .attr('fill', '#6366f1')
+                .attr('stroke', '#ffffff')
+                .attr('stroke-width', 2)
+                .style('cursor', 'crosshair')
+                .style('pointer-events', 'all')
+                .on('mousedown', function (event) {
+                    event.stopPropagation();
+                    startConnectorDraw(event, point, element);
+                });
+        });
+    });
+}
+
+function showResizeHandles(element) {
+    hideResizeHandles();
+
+    let points = [];
+    if (element.type === 'rectangle' || element.type === 'text' || element.type === 'triangle' || element.type === 'diamond') {
+        // For simple bounding box logic
+        const x = element.x;
+        const y = element.y;
+        const w = element.width || 0;
+        const h = element.height || 0;
+        points = [
+            { x: x, y: y },
+            { x: x + w, y: y },
+            { x: x + w, y: y + h },
+            { x: x, y: y + h }
+        ];
+    } else if (element.type === 'circle') {
+        const cx = element.cx, cy = element.cy, rx = element.rx, ry = element.ry;
+        points = [
+            { x: cx - rx, y: cy - ry },
+            { x: cx + rx, y: cy - ry },
+            { x: cx + rx, y: cy + ry },
+            { x: cx - rx, y: cy + ry }
+        ];
+    } else if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') {
+        points = [
+            { x: element.x1, y: element.y1 },
+            { x: element.x2, y: element.y2 }
+        ];
+    }
+
+    const group = mainGroup.append('g').attr('class', 'resize-handle-visual');
+    points.forEach(p => {
+        group.append('rect')
+            .attr('x', p.x - 4)
+            .attr('y', p.y - 4)
+            .attr('width', 8)
+            .attr('height', 8)
+            .attr('fill', '#ffffff')
+            .attr('stroke', '#6366f1')
+            .attr('stroke-width', 1)
+            .style('pointer-events', 'none');
+    });
+}
+
+function hideResizeHandles() {
+    mainGroup.selectAll('.resize-handle-visual').remove();
+}
+
+function startConnectorDraw(event, startPoint, sourceElement) {
+    state.isDrawingConnector = true;
+    state.connectorStart = startPoint;
+    state.connectorSourceElement = sourceElement;
+
+    // Create temporary link
+    const tempArrow = createLink(startPoint.x, startPoint.y, startPoint.x, startPoint.y);
+    tempArrow.startId = sourceElement.id;
+    state.tempConnectorArrow = tempArrow;
+
+    const rendered = renderElement(tempArrow);
+    rendered.attr('id', 'temp-connector');
+}
+
+function findNearestConnectorPoint(pos, excludeElementId) {
+    const threshold = 25; // Snap distance
+    let nearest = null;
+    let nearestDist = Infinity;
+
+    const elements = getCurrentFrameElements();
+
+    for (const element of elements) {
+        if (element.id === excludeElementId) continue;
+        if (element.type === 'line' || element.type === 'arrow') continue; // Skip lines/arrows
+
+        const points = getConnectorPoints(element);
+
+        for (const point of points) {
+            const dx = pos.x - point.x;
+            const dy = pos.y - point.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < threshold && dist < nearestDist) {
+                nearestDist = dist;
+                nearest = point;
+            }
+        }
+    }
+
+    return nearest;
+}
+
+function showSnapIndicator(point) {
+    hideSnapIndicator();
+
+    mainGroup.append('circle')
+        .attr('class', 'snap-indicator')
+        .attr('cx', point.x)
+        .attr('cy', point.y)
+        .attr('r', 10)
+        .attr('fill', 'none')
+        .attr('stroke', '#22c55e')
+        .attr('stroke-width', 2)
+        .style('pointer-events', 'none');
+}
+
+function hideSnapIndicator() {
+    mainGroup.selectAll('.snap-indicator').remove();
 }
 
 function selectElement(element, toggle = false) {
@@ -339,12 +704,19 @@ function selectElement(element, toggle = false) {
 
 function updateSelection() {
     mainGroup.selectAll('.element-selected').classed('element-selected', false);
+    hideResizeHandles();
 
     if (state.selectedElements.length > 0) {
         state.selectedElements.forEach(el => {
             mainGroup.select(`#${el.id}`)
                 .classed('element-selected', true);
         });
+
+        // Show resize handles for single selection only
+        if (state.selectedElements.length === 1) {
+            const el = state.selectedElements[0];
+            showResizeHandles(el);
+        }
     }
 }
 
@@ -370,7 +742,13 @@ function syncPropertiesFromElement(element) {
     }
 
     // Update UI controls
-    d3.select('#fillColor').property('value', state.properties.fill);
+    if (state.properties.fill === 'none') {
+        d3.select('#noFill').property('checked', true);
+    } else {
+        d3.select('#noFill').property('checked', false);
+        d3.select('#fillColor').property('value', state.properties.fill);
+    }
+
     d3.select('#strokeColor').property('value', state.properties.stroke);
     d3.select('#strokeWidth').property('value', state.properties.strokeWidth);
     d3.select('#opacity').property('value', Math.round(state.properties.opacity * 100));
@@ -431,20 +809,23 @@ svg.on('mousedown', function (event) {
         return;
     }
 
-    if (state.currentTool === 'select') {
-        // Check if clicking on a resize handle
-        if (state.selectedElements.length === 1) {
-            const handle = getResizeHandle(state.selectedElements[0], pos);
-            if (handle) {
-                state.isResizing = true;
-                state.resizeHandle = handle;
-                state.startPoint = pos;
-                return;
-            }
-        }
 
-        // Click outside? Deselect
-        // But dragging handles this too
+    // Global Check: Resize takes priority over creating new shapes
+    const target = findHandleOnAnyElement(pos);
+    if (target) {
+        // Switch to resizing this element
+        if (!state.selectedElements.some(e => e.id === target.element.id)) {
+            selectElement(target.element);
+        }
+        state.isResizing = true;
+        state.resizeHandle = target.handle;
+        state.startPoint = pos;
+        state.initialElement = { ...target.element };
+        return;
+    }
+
+    if (state.currentTool === 'select') {
+        // Click outside check handled implicitly by lack of handle/element hit
         if (event.target.id === 'canvas' || event.target.tagName === 'svg') {
             state.selectedElements = [];
             state.selectedElement = null;
@@ -458,8 +839,20 @@ svg.on('mousedown', function (event) {
         updateToolSelection();
         saveHistory();
     } else {
+        // Start drawing
         state.isDrawing = true;
-        state.startPoint = pos;
+
+        // Arrow snapping (Start Point)
+        let startP = pos;
+        state.tempStartId = null;
+        if (state.currentTool === 'arrow') {
+            const snap = snapToElement(pos);
+            if (snap) {
+                startP = { x: snap.x, y: snap.y };
+                state.tempStartId = snap.id;
+            }
+        }
+        state.startPoint = startP;
     }
 });
 
@@ -481,7 +874,7 @@ svg.on('mousemove', function (event) {
     }
 
     // Handle dragging
-    if (state.dragState.isDragging && state.currentTool === 'select') {
+    if (state.dragState.isDragging && (state.currentTool === 'select' || state.currentTool === 'span')) {
         const dx = pos.x - state.dragState.startX;
         const dy = pos.y - state.dragState.startY;
 
@@ -495,6 +888,39 @@ svg.on('mousemove', function (event) {
     if (state.isResizing && state.selectedElements.length === 1) {
         resizeElement(state.selectedElements[0], pos, state.resizeHandle);
         renderAllElements();
+        return;
+    }
+
+    // Handle connector drawing
+    if (state.isDrawingConnector && state.tempConnectorArrow) {
+        // Update temp arrow endpoint
+        state.tempConnectorArrow.x2 = pos.x;
+        state.tempConnectorArrow.y2 = pos.y;
+
+        // Snap start point to boundary towards mouse/target
+        if (state.connectorSourceElement) {
+            const startPt = getBoundaryPoint(state.connectorSourceElement, pos);
+            state.tempConnectorArrow.x1 = startPt.x;
+            state.tempConnectorArrow.y1 = startPt.y;
+        }
+
+        // Check for snap to other elements
+        const snapPoint = findNearestConnectorPoint(pos, state.connectorSourceElement.id);
+        if (snapPoint) {
+            state.tempConnectorArrow.x2 = snapPoint.x;
+            state.tempConnectorArrow.y2 = snapPoint.y;
+            state.tempConnectorArrow.endId = snapPoint.elementId;
+            // Show snap indicator
+            showSnapIndicator(snapPoint);
+        } else {
+            state.tempConnectorArrow.endId = null;
+            hideSnapIndicator();
+        }
+
+        // Re-render temp arrow
+        mainGroup.select('#temp-connector').remove();
+        const rendered = renderElement(state.tempConnectorArrow);
+        rendered.attr('id', 'temp-connector');
         return;
     }
 
@@ -512,11 +938,31 @@ svg.on('mousemove', function (event) {
             case 'circle':
                 element = createCircle(state.startPoint.x, state.startPoint.y, pos.x, pos.y);
                 break;
+            case 'triangle':
+                element = createTriangle(state.startPoint.x, state.startPoint.y, pos.x, pos.y);
+                break;
+            case 'diamond':
+                element = createDiamond(state.startPoint.x, state.startPoint.y, pos.x, pos.y);
+                break;
             case 'line':
                 element = createLine(state.startPoint.x, state.startPoint.y, pos.x, pos.y);
                 break;
             case 'arrow':
-                element = createArrow(state.startPoint.x, state.startPoint.y, pos.x, pos.y);
+                let endX = pos.x;
+                let endY = pos.y;
+                let endId = null;
+
+                // Snap to end element
+                const snapEnd = snapToElement(pos);
+                if (snapEnd) {
+                    endX = snapEnd.x;
+                    endY = snapEnd.y;
+                    endId = snapEnd.id;
+                }
+
+                element = createArrow(state.startPoint.x, state.startPoint.y, endX, endY);
+                if (state.tempStartId) element.startId = state.tempStartId;
+                if (endId) element.endId = endId;
                 break;
         }
 
@@ -526,9 +972,36 @@ svg.on('mousemove', function (event) {
         }
     }
 
-    // Update cursor for resize handles
-    if (state.currentTool === 'select' && !state.dragState.isDragging && !state.isResizing) {
-        updateCursorForResize(pos);
+    // Global Cursor Update
+    if (!state.dragState.isDragging && !state.isResizing && !state.isDrawing) {
+        // Check for resize handles
+        const target = findHandleOnAnyElement(pos);
+        if (target) {
+            svg.style('cursor', getCursorForHandle(target.handle));
+            return;
+        }
+
+        // Move/Default
+        if (state.currentTool === 'select' || state.currentTool === 'span') {
+            const elements = getCurrentFrameElements();
+            let isOver = false;
+            for (let i = elements.length - 1; i >= 0; i--) {
+                if (isPointOverElement(elements[i], pos)) {
+                    isOver = true;
+                    break;
+                }
+            }
+
+            if (isOver) {
+                svg.style('cursor', 'move');
+            } else {
+                svg.style('cursor', null);
+                svg.attr('data-tool', state.currentTool);
+            }
+        } else {
+            svg.style('cursor', null);
+            svg.attr('data-tool', state.currentTool);
+        }
     }
 });
 
@@ -571,6 +1044,51 @@ svg.on('mouseup', function (event) {
         saveHistory();
     }
 
+    // End connector drawing
+    if (state.isDrawingConnector && state.tempConnectorArrow) {
+        mainGroup.select('#temp-connector').remove();
+        hideSnapIndicator();
+        hideConnectorHandles();
+
+        // Check if arrow has sufficient length
+        const dx = state.tempConnectorArrow.x2 - state.tempConnectorArrow.x1;
+        const dy = state.tempConnectorArrow.y2 - state.tempConnectorArrow.y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+
+        if (length > 10) {
+            // Snap to boundaries - Ensure perfect connection
+            if (state.tempConnectorArrow.startId && state.tempConnectorArrow.endId) {
+                const elements = getCurrentFrameElements();
+                const startEl = elements.find(e => e.id === state.tempConnectorArrow.startId);
+                const endEl = elements.find(e => e.id === state.tempConnectorArrow.endId);
+
+                if (startEl && endEl) {
+                    const startCenter = getCenter(startEl);
+                    const endCenter = getCenter(endEl);
+                    const startPt = getBoundaryPoint(startEl, endCenter);
+                    const endPt = getBoundaryPoint(endEl, startCenter);
+
+                    state.tempConnectorArrow.x1 = startPt.x;
+                    state.tempConnectorArrow.y1 = startPt.y;
+                    state.tempConnectorArrow.x2 = endPt.x;
+                    state.tempConnectorArrow.y2 = endPt.y;
+                }
+            }
+
+            // Save the connector arrow
+            saveElementToFrame(state.tempConnectorArrow);
+            selectElement(state.tempConnectorArrow);
+            renderAllElements();
+            saveHistory();
+        }
+
+        // Reset connector state
+        state.isDrawingConnector = false;
+        state.connectorStart = null;
+        state.connectorSourceElement = null;
+        state.tempConnectorArrow = null;
+    }
+
     // End drawing
     if (state.isDrawing && state.tempElement) {
         saveElementToFrame(state.tempElement);
@@ -608,6 +1126,25 @@ function moveElementRecursive(element, dx, dy) {
             element.cx += dx;
             element.cy += dy;
             break;
+        case 'triangle':
+        case 'diamond':
+            element.x += dx;
+            element.y += dy;
+            // Recalculate points based on new position
+            if (element.type === 'triangle') {
+                const x = element.x;
+                const y = element.y;
+                const width = element.width;
+                const height = element.height;
+                element.points = `${x + width / 2},${y} ${x + width},${y + height} ${x},${y + height}`;
+            } else {
+                const x = element.x;
+                const y = element.y;
+                const width = element.width;
+                const height = element.height;
+                element.points = `${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`;
+            }
+            break;
         case 'line':
             element.x1 += dx;
             element.y1 += dy;
@@ -625,11 +1162,227 @@ function moveElementRecursive(element, dx, dy) {
             element.y += dy;
             break;
     }
+
+    // Update any arrows linked to this element
+    updateLinkedArrows(element, dx, dy);
+}
+
+function updateLinkedArrows(element, dx, dy) {
+    const elements = getCurrentFrameElements();
+    elements.forEach(el => {
+        // Handle legacy Arrows (simple move)
+        if (el.type === 'arrow') {
+            if (el.startId === element.id) {
+                el.x1 += dx;
+                el.y1 += dy;
+            }
+            if (el.endId === element.id) {
+                el.x2 += dx;
+                el.y2 += dy;
+            }
+        }
+        // Handle Links (Boundary Snap)
+        else if (el.type === 'link') {
+            // If connected to this moving element
+            if (el.startId === element.id || el.endId === element.id) {
+                const startEl = elements.find(e => e.id === el.startId);
+                const endEl = elements.find(e => e.id === el.endId);
+
+                // If both ends exist, snap to boundaries
+                if (startEl && endEl) {
+                    const startCenter = getCenter(startEl);
+                    const endCenter = getCenter(endEl);
+
+                    const startPt = getBoundaryPoint(startEl, endCenter);
+                    const endPt = getBoundaryPoint(endEl, startCenter);
+
+                    el.x1 = startPt.x;
+                    el.y1 = startPt.y;
+                    el.x2 = endPt.x;
+                    el.y2 = endPt.y;
+                }
+                // Fallback for dragging one end (e.g. during creation partial state?)
+                // Usually creation uses temp arrow.
+            }
+        }
+    });
+}
+
+function getCenter(el) {
+    if (el.type === 'circle') return { x: el.cx, y: el.cy };
+    if (el.type === 'line' || el.type === 'arrow' || el.type === 'link') {
+        return { x: (el.x1 + el.x2) / 2, y: (el.y1 + el.y2) / 2 };
+    }
+    // Rect, Text, Triangle, Diamond
+    return { x: el.x + el.width / 2, y: el.y + el.height / 2 };
+}
+
+function getBoundaryPoint(el, target) {
+    const center = getCenter(el);
+    const dx = target.x - center.x;
+    const dy = target.y - center.y;
+    const angle = Math.atan2(dy, dx);
+
+    if (el.type === 'circle') {
+        return {
+            x: center.x + Math.cos(angle) * el.rx,
+            y: center.y + Math.sin(angle) * el.ry
+        };
+    }
+
+    if (el.type === 'triangle') {
+        // Triangle vertices: top-center, bottom-left, bottom-right
+        const vertices = [
+            { x: el.x + el.width / 2, y: el.y },                    // top
+            { x: el.x, y: el.y + el.height },                       // bottom-left
+            { x: el.x + el.width, y: el.y + el.height }             // bottom-right
+        ];
+        return getPolygonBoundaryPoint(center, target, vertices);
+    }
+
+    if (el.type === 'diamond') {
+        // Diamond vertices: top, right, bottom, left
+        const vertices = [
+            { x: el.x + el.width / 2, y: el.y },                    // top
+            { x: el.x + el.width, y: el.y + el.height / 2 },        // right
+            { x: el.x + el.width / 2, y: el.y + el.height },        // bottom
+            { x: el.x, y: el.y + el.height / 2 }                    // left
+        ];
+        return getPolygonBoundaryPoint(center, target, vertices);
+    }
+
+    // Rectangle logic (works for Text, Rect, etc.)
+    const w = (el.width || 0) / 2;
+    const h = (el.height || 0) / 2;
+    if (w === 0 || h === 0) return center;
+
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const t_x = cos !== 0 ? (Math.sign(cos) * w) / cos : Infinity;
+    const t_y = sin !== 0 ? (Math.sign(sin) * h) / sin : Infinity;
+
+    const t = Math.min(Math.abs(t_x), Math.abs(t_y));
+
+    return {
+        x: center.x + t * cos,
+        y: center.y + t * sin
+    };
+}
+
+// Helper: Find intersection of ray from center to target with polygon edges
+function getPolygonBoundaryPoint(center, target, vertices) {
+    let closestPoint = center;
+    let minDist = Infinity;
+
+    for (let i = 0; i < vertices.length; i++) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+
+        const intersection = lineIntersection(
+            center.x, center.y, target.x, target.y,
+            v1.x, v1.y, v2.x, v2.y
+        );
+
+        if (intersection) {
+            const dist = Math.sqrt(
+                Math.pow(intersection.x - center.x, 2) +
+                Math.pow(intersection.y - center.y, 2)
+            );
+            if (dist < minDist && dist > 0.1) {
+                minDist = dist;
+                closestPoint = intersection;
+            }
+        }
+    }
+
+    return closestPoint;
+}
+
+// Helper: Line segment intersection
+function lineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 0.0001) return null;
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+    // t > 0 means intersection is in the direction of target
+    // u between 0 and 1 means intersection is on the edge segment
+    if (t > 0 && u >= 0 && u <= 1) {
+        return {
+            x: x1 + t * (x2 - x1),
+            y: y1 + t * (y2 - y1)
+        };
+    }
+    return null;
+}
+
+
+function snapToElement(pos) {
+    // Helper to find nearest element anchor (center)
+    // Returns { x, y, id } or null
+    const threshold = 15;
+    const elements = getCurrentFrameElements();
+
+    // Reverse check for z-index
+    for (let i = elements.length - 1; i >= 0; i--) {
+        const el = elements[i];
+        if (el.type === 'arrow' || el.type === 'line' || el.type === 'text') continue; // Snap to shapes only
+        if (state.tempElement && el.id === state.tempElement.id) continue; // Don't snap to self
+
+        let cx, cy;
+        if (el.type === 'circle') {
+            cx = el.cx; cy = el.cy;
+        } else {
+            cx = el.x + el.width / 2;
+            cy = el.y + el.height / 2;
+        }
+
+        const dist = Math.sqrt((pos.x - cx) ** 2 + (pos.y - cy) ** 2);
+        if (dist < threshold) {
+            return { x: cx, y: cy, id: el.id };
+        }
+    }
+    return null;
+}
+
+
+
+function findHandleOnAnyElement(pos) {
+    const elements = getCurrentFrameElements();
+    // Check in reverse order (top z-index first) to find the top-most interactable element
+    for (let i = elements.length - 1; i >= 0; i--) {
+        const el = elements[i];
+        const handle = getResizeHandle(el, pos);
+        if (handle) return { element: el, handle };
+    }
+    return null;
 }
 
 // ===== Resize Functions =====
 function getResizeHandle(element, pos) {
-    const threshold = 10; // pixels from edge to detect resize
+    const threshold = 6; // Reduced to 6px to prevent false positives
+
+    // Internal helper for distance
+    const dist = (x1, y1, x2, y2) => Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+
+    // Internal helper for point to segment distance
+    const pointToLine = (x, y, x1, y1, x2, y2) => {
+        const A = x - x1;
+        const B = y - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+        const dot = A * C + B * D;
+        const len_sq = C * C + D * D;
+        let param = -1;
+        if (len_sq !== 0) param = dot / len_sq;
+        let xx, yy;
+        if (param < 0) { xx = x1; yy = y1; }
+        else if (param > 1) { xx = x2; yy = y2; }
+        else { xx = x1 + param * C; yy = y1 + param * D; }
+        return dist(x, y, xx, yy);
+    };
 
     switch (element.type) {
         case 'rectangle':
@@ -637,45 +1390,88 @@ function getResizeHandle(element, pos) {
             const bottom = element.y + element.height;
 
             // Check corners first (priority)
-            if (Math.abs(pos.x - right) < threshold && Math.abs(pos.y - bottom) < threshold) {
-                return 'se'; // southeast
-            }
-            if (Math.abs(pos.x - element.x) < threshold && Math.abs(pos.y - bottom) < threshold) {
-                return 'sw'; // southwest
-            }
-            if (Math.abs(pos.x - right) < threshold && Math.abs(pos.y - element.y) < threshold) {
-                return 'ne'; // northeast
-            }
-            if (Math.abs(pos.x - element.x) < threshold && Math.abs(pos.y - element.y) < threshold) {
-                return 'nw'; // northwest
-            }
+            if (Math.abs(pos.x - right) < threshold && Math.abs(pos.y - bottom) < threshold) return 'se';
+            if (Math.abs(pos.x - element.x) < threshold && Math.abs(pos.y - bottom) < threshold) return 'sw';
+            if (Math.abs(pos.x - right) < threshold && Math.abs(pos.y - element.y) < threshold) return 'ne';
+            if (Math.abs(pos.x - element.x) < threshold && Math.abs(pos.y - element.y) < threshold) return 'nw';
 
-            // Check edges
-            if (Math.abs(pos.x - right) < threshold && pos.y >= element.y && pos.y <= bottom) {
-                return 'e'; // east
-            }
-            if (Math.abs(pos.x - element.x) < threshold && pos.y >= element.y && pos.y <= bottom) {
-                return 'w'; // west
-            }
-            if (Math.abs(pos.y - bottom) < threshold && pos.x >= element.x && pos.x <= right) {
-                return 's'; // south
-            }
-            if (Math.abs(pos.y - element.y) < threshold && pos.x >= element.x && pos.x <= right) {
-                return 'n'; // north
-            }
+
+            break;
+
+        case 'triangle':
+            const t_top = { x: element.x + element.width / 2, y: element.y };
+            const t_bl = { x: element.x, y: element.y + element.height };
+            const t_br = { x: element.x + element.width, y: element.y + element.height };
+
+            // Detect Vertices (map to standard box handles)
+            if (dist(pos.x, pos.y, t_top.x, t_top.y) < threshold) return 'n';
+            if (dist(pos.x, pos.y, t_br.x, t_br.y) < threshold) return 'se';
+            if (dist(pos.x, pos.y, t_bl.x, t_bl.y) < threshold) return 'sw';
+
+            // Detect Edges (map to standard box handles)
+            if (pointToLine(pos.x, pos.y, t_top.x, t_top.y, t_br.x, t_br.y) < threshold) return 'e'; // Right slant
+            if (pointToLine(pos.x, pos.y, t_top.x, t_top.y, t_bl.x, t_bl.y) < threshold) return 'w'; // Left slant
+            if (pointToLine(pos.x, pos.y, t_bl.x, t_bl.y, t_br.x, t_br.y) < threshold) return 's'; // Bottom
+            break;
+
+        case 'diamond':
+            const d_top = { x: element.x + element.width / 2, y: element.y };
+            const d_right = { x: element.x + element.width, y: element.y + element.height / 2 };
+            const d_bot = { x: element.x + element.width / 2, y: element.y + element.height };
+            const d_left = { x: element.x, y: element.y + element.height / 2 };
+
+            // Detect Vertices
+            if (dist(pos.x, pos.y, d_top.x, d_top.y) < threshold) return 'n';
+            if (dist(pos.x, pos.y, d_right.x, d_right.y) < threshold) return 'e';
+            if (dist(pos.x, pos.y, d_bot.x, d_bot.y) < threshold) return 's';
+            if (dist(pos.x, pos.y, d_left.x, d_left.y) < threshold) return 'w';
+
+            // Detect Edges (map to corner handles for diagonal resize)
+            if (pointToLine(pos.x, pos.y, d_top.x, d_top.y, d_right.x, d_right.y) < threshold) return 'ne';
+            if (pointToLine(pos.x, pos.y, d_right.x, d_right.y, d_bot.x, d_bot.y) < threshold) return 'se';
+            if (pointToLine(pos.x, pos.y, d_bot.x, d_bot.y, d_left.x, d_left.y) < threshold) return 'sw';
+            if (pointToLine(pos.x, pos.y, d_left.x, d_left.y, d_top.x, d_top.y) < threshold) return 'nw';
             break;
 
         case 'circle':
-            // Check if near the edge of the ellipse
-            const dx = pos.x - element.cx;
-            const dy = pos.y - element.cy;
-            const distance = Math.sqrt((dx * dx) / (element.rx * element.rx) + (dy * dy) / (element.ry * element.ry));
+            // Treat circle as bounding box for handles to ensure alignment
+            const c_x = element.cx - element.rx;
+            const c_y = element.cy - element.ry;
+            const c_right = element.cx + element.rx;
+            const c_bottom = element.cy + element.ry;
 
-            if (Math.abs(distance - 1) < threshold / Math.min(element.rx, element.ry)) {
-                // Determine which direction based on angle
-                const angle = Math.atan2(dy, dx);
-                return { type: 'radial', angle };
-            }
+            // Check corners
+            if (dist(pos.x, pos.y, c_right, c_bottom) < threshold) return 'se';
+            if (dist(pos.x, pos.y, c_x, c_bottom) < threshold) return 'sw';
+            if (dist(pos.x, pos.y, c_right, c_y) < threshold) return 'ne';
+            if (dist(pos.x, pos.y, c_x, c_y) < threshold) return 'nw';
+
+
+            break;
+
+        case 'line':
+        case 'arrow':
+            // Handles at both endpoints
+            if (dist(pos.x, pos.y, element.x1, element.y1) < threshold) return 'start';
+            if (dist(pos.x, pos.y, element.x2, element.y2) < threshold) return 'end';
+            break;
+
+        case 'text':
+            // Text bounding box handles
+            const textWidth = (element.text || '').length * (element.fontSize || 16) * 0.6;
+            const textHeight = (element.fontSize || 16) * 1.2;
+            const textX = element.textAlign === 'middle' ? element.x - textWidth / 2 : element.x;
+            const textY = element.y - textHeight * 0.8;
+            const textRight = textX + textWidth;
+            const textBottom = textY + textHeight;
+
+            // Check corners
+            if (dist(pos.x, pos.y, textRight, textBottom) < threshold) return 'se';
+            if (dist(pos.x, pos.y, textX, textBottom) < threshold) return 'sw';
+            if (dist(pos.x, pos.y, textRight, textY) < threshold) return 'ne';
+            if (dist(pos.x, pos.y, textX, textY) < threshold) return 'nw';
+
+
             break;
     }
 
@@ -683,59 +1479,193 @@ function getResizeHandle(element, pos) {
 }
 
 function resizeElement(element, pos, handle) {
+    const init = state.initialElement;
+    if (!init) return;
+
+    const dx = pos.x - state.startPoint.x;
+    const dy = pos.y - state.startPoint.y;
+    const MIN = 10;
+
+    if (element.type === 'circle') {
+        const initX = init.cx - init.rx;
+        const initY = init.cy - init.ry;
+        const initW = init.rx * 2;
+        const initH = init.ry * 2;
+
+        let newX = initX; let newY = initY; let newW = initW; let newH = initH;
+
+        if (handle.includes('e')) newW = Math.max(MIN, initW + dx);
+        if (handle.includes('w')) {
+            newW = Math.max(MIN, initW - dx);
+            newX = initX + (initW - newW);
+        }
+        if (handle.includes('s')) newH = Math.max(MIN, initH + dy);
+        if (handle.includes('n')) {
+            newH = Math.max(MIN, initH - dy);
+            newY = initY + (initH - newH);
+        }
+
+        element.rx = newW / 2;
+        element.ry = newH / 2;
+        element.cx = newX + element.rx;
+        element.cy = newY + element.ry;
+    } else if (element.type === 'rectangle' || element.type === 'triangle' || element.type === 'diamond') {
+        // Rectangle, Triangle, Diamond
+        let newX = init.x; let newY = init.y; let newW = init.width; let newH = init.height;
+
+        if (handle.includes('e')) newW = Math.max(MIN, init.width + dx);
+        if (handle.includes('w')) {
+            newW = Math.max(MIN, init.width - dx);
+            newX = init.x + (init.width - newW);
+        }
+        if (handle.includes('s')) newH = Math.max(MIN, init.height + dy);
+        if (handle.includes('n')) {
+            newH = Math.max(MIN, init.height - dy);
+            newY = init.y + (init.height - newH);
+        }
+
+        element.x = newX; element.y = newY; element.width = newW; element.height = newH;
+
+        // Recalculate polygon points
+        if (element.type === 'triangle') {
+            const x = element.x, y = element.y, w = element.width, h = element.height;
+            element.points = `${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}`;
+        } else if (element.type === 'diamond') {
+            const x = element.x, y = element.y, w = element.width, h = element.height;
+            element.points = `${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}`;
+        }
+    } else if (element.type === 'line' || element.type === 'arrow') {
+        // Line/Arrow endpoint resize with snapping
+        if (handle === 'start') {
+            const snap = snapToElement(pos);
+            if (snap) {
+                element.x1 = snap.x;
+                element.y1 = snap.y;
+                element.startId = snap.id;
+            } else {
+                element.x1 = pos.x;
+                element.y1 = pos.y;
+                element.startId = null;
+            }
+        } else if (handle === 'end') {
+            const snap = snapToElement(pos);
+            if (snap) {
+                element.x2 = snap.x;
+                element.y2 = snap.y;
+                element.endId = snap.id;
+            } else {
+                element.x2 = pos.x;
+                element.y2 = pos.y;
+                element.endId = null;
+            }
+        }
+    } else if (element.type === 'text') {
+        // Text resize - change font size based on drag
+        const initFontSize = init.fontSize || 16;
+
+        // Calculate scale factor based on vertical drag (more intuitive)
+        if (handle.includes('s') || handle.includes('n')) {
+            const scaleFactor = 1 + (dy / 100);
+            element.fontSize = Math.max(8, Math.min(200, Math.round(initFontSize * scaleFactor)));
+        }
+        if (handle.includes('e') || handle.includes('w')) {
+            const scaleFactor = 1 + (dx / 100);
+            element.fontSize = Math.max(8, Math.min(200, Math.round(initFontSize * scaleFactor)));
+        }
+
+        if (handle.includes('n')) {
+            element.y = init.y + dy;
+        }
+    }
+
+    // Update links attached to this element
+    updateLinkedArrows(element, 0, 0);
+}
+
+function isPointOverElement(element, pos) {
+    // Check if a point is over an element (for cursor/hit testing)
+    const threshold = 5;
+
     switch (element.type) {
         case 'rectangle':
-            const oldX = element.x;
-            const oldY = element.y;
-            const oldRight = element.x + element.width;
-            const oldBottom = element.y + element.height;
-
-            if (handle.includes('e')) {
-                element.width = Math.max(10, pos.x - element.x);
-            }
-            if (handle.includes('w')) {
-                const newX = Math.min(pos.x, oldRight - 10);
-                element.width = oldRight - newX;
-                element.x = newX;
-            }
-            if (handle.includes('s')) {
-                element.height = Math.max(10, pos.y - element.y);
-            }
-            if (handle.includes('n')) {
-                const newY = Math.min(pos.y, oldBottom - 10);
-                element.height = oldBottom - newY;
-                element.y = newY;
-            }
-            break;
+            return pos.x >= element.x && pos.x <= element.x + element.width &&
+                pos.y >= element.y && pos.y <= element.y + element.height;
 
         case 'circle':
-            if (handle.type === 'radial') {
-                const dx = pos.x - element.cx;
-                const dy = pos.y - element.cy;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+            const dx = pos.x - element.cx;
+            const dy = pos.y - element.cy;
+            return (dx * dx) / (element.rx * element.rx) + (dy * dy) / (element.ry * element.ry) <= 1;
 
-                // Resize proportionally or along the angle
-                const cos = Math.cos(handle.angle);
-                const sin = Math.sin(handle.angle);
+        case 'triangle':
+            // Use barycentric coordinates
+            const x1 = element.x + element.width / 2, y1 = element.y;
+            const x2 = element.x + element.width, y2 = element.y + element.height;
+            const x3 = element.x, y3 = element.y + element.height;
 
-                element.rx = Math.max(10, Math.abs(distance * cos));
-                element.ry = Math.max(10, Math.abs(distance * sin));
-            }
-            break;
+            const den = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+            if (den === 0) return false;
+
+            const a = ((y2 - y3) * (pos.x - x3) + (x3 - x2) * (pos.y - y3)) / den;
+            const b = ((y3 - y1) * (pos.x - x3) + (x1 - x3) * (pos.y - y3)) / den;
+            const c = 1 - a - b;
+
+            return a >= 0 && b >= 0 && c >= 0;
+
+        case 'diamond':
+            const dxD = Math.abs(pos.x - (element.x + element.width / 2));
+            const dyD = Math.abs(pos.y - (element.y + element.height / 2));
+            const hw = Math.max(element.width / 2, 1);
+            const hh = Math.max(element.height / 2, 1);
+            return (dxD / hw + dyD / hh) <= 1;
+
+        case 'line':
+        case 'arrow':
+            // Check distance to line segment
+            const A = pos.x - element.x1;
+            const B = pos.y - element.y1;
+            const C = element.x2 - element.x1;
+            const D = element.y2 - element.y1;
+            const dot = A * C + B * D;
+            const len_sq = C * C + D * D;
+            let param = len_sq !== 0 ? dot / len_sq : -1;
+
+            let xx, yy;
+            if (param < 0) { xx = element.x1; yy = element.y1; }
+            else if (param > 1) { xx = element.x2; yy = element.y2; }
+            else { xx = element.x1 + param * C; yy = element.y1 + param * D; }
+
+            const dist = Math.sqrt((pos.x - xx) ** 2 + (pos.y - yy) ** 2);
+            return dist < 10; // 10px tolerance for lines
+
+        case 'text':
+            // Estimate text bounds
+            const textWidth = (element.text || '').length * (element.fontSize || 16) * 0.6;
+            const textHeight = (element.fontSize || 16) * 1.2;
+            const textX = element.textAlign === 'middle' ? element.x - textWidth / 2 : element.x;
+            const textY = element.y - textHeight * 0.8;
+
+            return pos.x >= textX && pos.x <= textX + textWidth &&
+                pos.y >= textY && pos.y <= textY + textHeight;
+
+        default:
+            return false;
     }
 }
 
 function updateCursorForResize(pos) {
     if (state.selectedElements.length !== 1) {
-        svg.style('cursor', 'crosshair');
+        // Reset to tool cursor by re-triggering data-tool attribute
+        svg.attr('data-tool', state.currentTool);
+        svg.style('cursor', null); // Remove inline style to use CSS cursor
         return;
     }
 
     const handle = getResizeHandle(state.selectedElements[0], pos);
 
     if (handle) {
+        // At resize boundary - show resize cursor
         if (typeof handle === 'string') {
-            // Rectangle handles
+            // Rectangle/triangle/diamond/line/arrow handles
             const cursorMap = {
                 'nw': 'nw-resize',
                 'n': 'n-resize',
@@ -744,7 +1674,9 @@ function updateCursorForResize(pos) {
                 'se': 'se-resize',
                 's': 's-resize',
                 'sw': 'sw-resize',
-                'w': 'w-resize'
+                'w': 'w-resize',
+                'start': 'crosshair',
+                'end': 'crosshair'
             };
             svg.style('cursor', cursorMap[handle] || 'default');
         } else {
@@ -752,10 +1684,19 @@ function updateCursorForResize(pos) {
             svg.style('cursor', 'nwse-resize');
         }
     } else {
-        svg.style('cursor', 'default');
+        // Not at resize boundary - check if we're over the selected element
+        const element = state.selectedElements[0];
+        const isOverElement = isPointOverElement(element, pos);
+
+        if (isOverElement) {
+            // Over the element but not at boundary - show move cursor
+            svg.style('cursor', 'move');
+        } else {
+            // Not over element - show tool cursor
+            svg.style('cursor', null);
+        }
     }
 }
-
 
 // ===== Frame Management =====
 function addFrame() {
@@ -960,6 +1901,23 @@ function createStartStateForNewElement(element) {
             startState.opacity = 0;
             break;
 
+        case 'triangle':
+        case 'diamond':
+            const cx = element.x + element.width / 2;
+            const cy = element.y + element.height / 2;
+            startState.x = cx;
+            startState.y = cy;
+            startState.width = 0;
+            startState.height = 0;
+            startState.opacity = 0;
+            // Recalculate points for zero-size shape
+            if (element.type === 'triangle') {
+                startState.points = `${cx},${cy} ${cx},${cy} ${cx},${cy}`;
+            } else {
+                startState.points = `${cx},${cy} ${cx},${cy} ${cx},${cy} ${cx},${cy}`;
+            }
+            break;
+
         case 'circle':
             startState.rx = 0;
             startState.ry = 0;
@@ -982,6 +1940,16 @@ function createStartStateForNewElement(element) {
             // Start slightly above final position
             startState.y = element.y - 20;
             break;
+
+        case 'link':
+            const linkMidX = (element.x1 + element.x2) / 2;
+            const linkMidY = (element.y1 + element.y2) / 2;
+            startState.x1 = linkMidX;
+            startState.y1 = linkMidY;
+            startState.x2 = linkMidX;
+            startState.y2 = linkMidY;
+            startState.opacity = 0;
+            break;
     }
 
     return startState;
@@ -1000,6 +1968,23 @@ function createEndStateForDepartingElement(element) {
             endState.width = 0;
             endState.height = 0;
             endState.opacity = 0;
+            break;
+
+        case 'triangle':
+        case 'diamond':
+            const cx = element.x + element.width / 2;
+            const cy = element.y + element.height / 2;
+            endState.x = cx;
+            endState.y = cy;
+            endState.width = 0;
+            endState.height = 0;
+            endState.opacity = 0;
+            // Recalculate points for zero-size shape
+            if (element.type === 'triangle') {
+                endState.points = `${cx},${cy} ${cx},${cy} ${cx},${cy}`;
+            } else {
+                endState.points = `${cx},${cy} ${cx},${cy} ${cx},${cy} ${cx},${cy}`;
+            }
             break;
 
         case 'circle':
@@ -1023,6 +2008,16 @@ function createEndStateForDepartingElement(element) {
             endState.opacity = 0;
             // End slightly below current position
             endState.y = element.y + 20;
+            break;
+
+        case 'link':
+            const linkMidX = (element.x1 + element.x2) / 2;
+            const linkMidY = (element.y1 + element.y2) / 2;
+            endState.x1 = linkMidX;
+            endState.y1 = linkMidY;
+            endState.x2 = linkMidX;
+            endState.y2 = linkMidY;
+            endState.opacity = 0;
             break;
     }
 
@@ -1059,8 +2054,32 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
                 .attr('opacity', toEl.opacity);
             break;
 
-        case 'line':
+        case 'triangle':
+        case 'diamond':
             selection.transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('points', toEl.points)
+                .attr('fill', toEl.fill)
+                .attr('stroke', toEl.stroke)
+                .attr('stroke-width', toEl.strokeWidth)
+                .attr('opacity', toEl.opacity);
+            break;
+
+        case 'line':
+            // Animate invisible hit area (child 1)
+            selection.select('line:nth-child(1)')
+                .transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('x1', toEl.x1)
+                .attr('y1', toEl.y1)
+                .attr('x2', toEl.x2)
+                .attr('y2', toEl.y2);
+
+            // Animate visible line (child 2)
+            selection.select('line:nth-child(2)')
+                .transition()
                 .duration(duration)
                 .ease(ease)
                 .attr('x1', toEl.x1)
@@ -1073,7 +2092,18 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
             break;
 
         case 'arrow':
-            selection.select('line')
+            // Animate invisible hit area
+            selection.select('line:nth-child(1)')
+                .transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('x1', toEl.x1)
+                .attr('y1', toEl.y1)
+                .attr('x2', toEl.x2)
+                .attr('y2', toEl.y2);
+
+            // Animate visible line
+            selection.select('line:nth-child(2)')
                 .transition()
                 .duration(duration)
                 .ease(ease)
@@ -1085,32 +2115,75 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
                 .attr('stroke-width', toEl.strokeWidth)
                 .attr('opacity', toEl.opacity);
 
-            const angle = Math.atan2(toEl.y2 - toEl.y1, toEl.x2 - toEl.x1);
-            const arrowSize = 12;
+            const angle = Math.atan2(toEl.y2 - toEl.y1, toEl.x2 - toEl.x1) * 180 / Math.PI;
 
             selection.select('polygon')
                 .transition()
                 .duration(duration)
                 .ease(ease)
-                .attr('transform', `translate(${toEl.x2},${toEl.y2}) rotate(${angle * 180 / Math.PI})`)
+                .attr('transform', `translate(${toEl.x2},${toEl.y2}) rotate(${angle})`)
                 .attr('fill', toEl.stroke)
                 .attr('opacity', toEl.opacity);
             break;
 
         case 'text':
-            selection.transition()
+            // Text is a group with rect (hit area) and text element
+            const textWidth = (toEl.text || '').length * (toEl.fontSize || 16) * 0.6;
+            const textHeight = (toEl.fontSize || 16) * 1.2;
+            const textX = toEl.textAlign === 'middle' ? toEl.x - textWidth / 2 : toEl.x;
+            const textY = toEl.y - textHeight * 0.8;
+
+            selection.select('rect')
+                .transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('x', textX)
+                .attr('y', textY)
+                .attr('width', textWidth)
+                .attr('height', textHeight);
+
+            selection.select('text')
+                .transition()
                 .duration(duration)
                 .ease(ease)
                 .attr('x', toEl.x)
                 .attr('y', toEl.y)
                 .attr('fill', toEl.fill)
                 .attr('font-size', toEl.fontSize)
-                .attr('opacity', toEl.opacity);
+                .attr('opacity', toEl.opacity)
+                .tween('text', function () {
+                    const that = this;
+                    return function () {
+                        if (that.textContent !== toEl.text) {
+                            that.textContent = toEl.text;
+                        }
+                    };
+                });
+            break;
 
-            // Update text content
-            if (fromEl.text !== toEl.text) {
-                selection.text(toEl.text);
-            }
+        case 'link':
+            // Animate invisible hit area (child 1)
+            selection.select('line:nth-child(1)')
+                .transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('x1', toEl.x1)
+                .attr('y1', toEl.y1)
+                .attr('x2', toEl.x2)
+                .attr('y2', toEl.y2);
+
+            // Animate visible line (child 2)
+            selection.select('line:nth-child(2)')
+                .transition()
+                .duration(duration)
+                .ease(ease)
+                .attr('x1', toEl.x1)
+                .attr('y1', toEl.y1)
+                .attr('x2', toEl.x2)
+                .attr('y2', toEl.y2)
+                .attr('stroke', toEl.stroke)
+                .attr('stroke-width', toEl.strokeWidth)
+                .attr('opacity', toEl.opacity);
             break;
     }
 }
@@ -1122,17 +2195,25 @@ function selectTool(tool) {
 
     // Set data-tool for cursor styling
     svg.attr('data-tool', tool);
-
-    if (tool === 'select') {
-        svg.classed('select-mode', true);
-    } else {
-        svg.classed('select-mode', false);
-    }
 }
 
 function updateToolSelection() {
     d3.selectAll('.tool-btn').classed('active', false);
     d3.select(`.tool-btn[data-tool="${state.currentTool}"]`).classed('active', true);
+
+    // Disable 'No Fill' for text tool (text uses fill for color)
+    const noFillCheckbox = d3.select('#noFill');
+    if (state.currentTool === 'text') {
+        noFillCheckbox.property('disabled', true);
+        noFillCheckbox.property('checked', false);
+        // Ensure fill has a visible color for text
+        if (state.properties.fill === 'none') {
+            state.properties.fill = '#ffffff';
+            d3.select('#fillColor').property('value', '#ffffff');
+        }
+    } else {
+        noFillCheckbox.property('disabled', false);
+    }
 }
 
 // ===== Property Updates =====
@@ -1304,6 +2385,44 @@ function showContextMenu(event, element) {
     // Divider
     menu.append('div').attr('class', 'context-menu-divider');
 
+    // Add Label action
+    menu.append('div')
+        .attr('class', 'context-menu-item context-menu-action')
+        .text('Add Label')
+        .on('click', function () {
+            const text = prompt('Enter label text:', 'Label');
+            if (text) {
+                let cx, cy;
+                if (element.type === 'circle') { cx = element.cx; cy = element.cy; }
+                else if (element.type === 'line' || element.type === 'arrow') {
+                    cx = (element.x1 + element.x2) / 2; cy = (element.y1 + element.y2) / 2;
+                }
+                else { cx = element.x + element.width / 2; cy = element.y + element.height / 2; }
+
+                const label = createText(cx, cy);
+                label.text = text;
+                label.textAlign = 'middle';
+
+                // Create Group
+                const group = {
+                    id: generateId(),
+                    type: 'group',
+                    children: [element, label],
+                    x: 0, y: 0
+                };
+
+                const frameElements = getCurrentFrameElements();
+                const idx = frameElements.findIndex(e => e.id === element.id);
+                if (idx !== -1) {
+                    frameElements[idx] = group;
+                    selectElement(group);
+                    renderAllElements();
+                    saveHistory();
+                }
+            }
+            hideContextMenu();
+        });
+
     // Duplicate action
     menu.append('div')
         .attr('class', 'context-menu-item context-menu-action')
@@ -1366,13 +2485,51 @@ d3.select('#exportBtn').on('click', function () {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'd3motion-export.json';
+    link.download = 'd3form-export.json';
     link.click();
     URL.revokeObjectURL(url);
 });
 
+d3.select('#importBtn').on('click', function () {
+    document.getElementById('importFile').click();
+});
 
+d3.select('#importFile').on('change', function () {
+    const file = this.files[0];
+    if (!file) return;
 
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const importedFrames = JSON.parse(e.target.result);
+
+            // Validate the imported data
+            if (!Array.isArray(importedFrames) || importedFrames.length === 0) {
+                alert('Invalid file format. Expected an array of frames.');
+                return;
+            }
+
+            // Import the frames
+            state.frames = importedFrames;
+            state.currentFrame = 0;
+            state.selectedElements = [];
+            state.selectedElement = null;
+
+            renderFramesList();
+            renderAllElements();
+            updateFrameIndicator();
+            saveHistory();
+
+            console.log(`📥 Imported ${importedFrames.length} frame(s)`);
+        } catch (err) {
+            alert('Error parsing file: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+
+    // Reset the input so the same file can be imported again
+    this.value = '';
+});
 
 
 
@@ -1571,56 +2728,100 @@ function redo() {
 
 // ===== Clipboard Operations =====
 function cutElement() {
-    if (state.selectedElement) {
-        state.clipboard = JSON.parse(JSON.stringify(state.selectedElement));
+    if (state.selectedElements.length > 0) {
+        // Copy all selected elements to clipboard
+        state.clipboard = JSON.parse(JSON.stringify(state.selectedElements));
+
+        // Remove all selected elements from the frame
         const elements = getCurrentFrameElements();
-        const index = elements.findIndex(el => el.id === state.selectedElement.id);
-        if (index >= 0) {
-            elements.splice(index, 1);
-            state.selectedElement = null;
-            renderAllElements();
-            saveHistory();
+        const idsToRemove = new Set(state.selectedElements.map(el => el.id));
+
+        for (let i = elements.length - 1; i >= 0; i--) {
+            if (idsToRemove.has(elements[i].id)) {
+                elements.splice(i, 1);
+            }
         }
+
+        state.selectedElements = [];
+        state.selectedElement = null;
+        renderAllElements();
+        saveHistory();
     }
 }
 
 function copyElement() {
-    if (state.selectedElement) {
-        state.clipboard = JSON.parse(JSON.stringify(state.selectedElement));
+    if (state.selectedElements.length > 0) {
+        // Copy all selected elements to clipboard
+        state.clipboard = JSON.parse(JSON.stringify(state.selectedElements));
     }
 }
 
 function pasteElement() {
     if (state.clipboard) {
-        const newElement = JSON.parse(JSON.stringify(state.clipboard));
-        newElement.id = generateId();
+        // Handle both single element and array of elements
+        const elementsToPaste = Array.isArray(state.clipboard) ? state.clipboard : [state.clipboard];
+        const newElements = [];
 
-        // Offset the pasted element slightly
-        switch (newElement.type) {
-            case 'rectangle':
-                newElement.x += 20;
-                newElement.y += 20;
-                break;
-            case 'circle':
-                newElement.cx += 20;
-                newElement.cy += 20;
-                break;
-            case 'line':
-            case 'arrow':
-                newElement.x1 += 20;
-                newElement.y1 += 20;
-                newElement.x2 += 20;
-                newElement.y2 += 20;
-                break;
-            case 'text':
-                newElement.x += 20;
-                newElement.y += 20;
-                break;
-        }
+        elementsToPaste.forEach(clipboardElement => {
+            const newElement = JSON.parse(JSON.stringify(clipboardElement));
+            newElement.id = generateId();
 
-        saveElementToFrame(newElement);
+            // Offset the pasted element slightly
+            switch (newElement.type) {
+                case 'rectangle':
+                    newElement.x += 20;
+                    newElement.y += 20;
+                    break;
+                case 'circle':
+                    newElement.cx += 20;
+                    newElement.cy += 20;
+                    break;
+                case 'line':
+                case 'arrow':
+                    newElement.x1 += 20;
+                    newElement.y1 += 20;
+                    newElement.x2 += 20;
+                    newElement.y2 += 20;
+                    break;
+                case 'text':
+                    newElement.x += 20;
+                    newElement.y += 20;
+                    break;
+                case 'path':
+                    newElement.x += 20;
+                    newElement.y += 20;
+                    break;
+                case 'group':
+                    // For groups, recursively update all children IDs
+                    newElement.children = newElement.children.map(child => {
+                        const newChild = { ...child, id: generateId() };
+                        // Apply offset to children too
+                        if (newChild.x !== undefined) newChild.x += 20;
+                        if (newChild.y !== undefined) newChild.y += 20;
+                        if (newChild.cx !== undefined) newChild.cx += 20;
+                        if (newChild.cy !== undefined) newChild.cy += 20;
+                        if (newChild.x1 !== undefined) {
+                            newChild.x1 += 20;
+                            newChild.y1 += 20;
+                            newChild.x2 += 20;
+                            newChild.y2 += 20;
+                        }
+                        return newChild;
+                    });
+                    break;
+            }
+
+            saveElementToFrame(newElement);
+            newElements.push(newElement);
+        });
+
         renderAllElements();
-        selectElement(newElement);
+
+        // Select all newly pasted elements
+        state.selectedElements = newElements;
+        state.selectedElement = newElements[newElements.length - 1];
+        updateSelection();
+
         saveHistory();
     }
 }
@@ -1660,14 +2861,6 @@ document.addEventListener('keydown', (event) => {
                 event.preventDefault();
                 pasteElement();
                 break;
-            case 'g':
-                event.preventDefault();
-                if (event.shiftKey) {
-                    ungroupSelectedElements();
-                } else {
-                    groupSelectedElements();
-                }
-                break;
         }
         return;
     }
@@ -1685,6 +2878,15 @@ document.addEventListener('keydown', (event) => {
                 break;
             case 'c':
                 selectTool('circle');
+                break;
+            case 'q':
+                selectTool('triangle');
+                break;
+            case 'd':
+                // Only select diamond tool if not using Ctrl (preserve Ctrl+Shift+D for duplicate frame)
+                if (!event.ctrlKey && !event.metaKey) {
+                    selectTool('diamond');
+                }
                 break;
             case 't':
                 selectTool('text');
@@ -1742,7 +2944,45 @@ window.addEventListener('resize', () => {
 // ===== Initialize =====
 renderFramesList();
 updateFrameIndicator();
-updateProperties();
+updateFrameIndicator();
+// updateProperties(); // Replaced by logic below
+
+// ===== Property Listeners (Fill/No Fill) =====
+d3.select('#noFill').on('change', function () {
+    const isChecked = d3.select(this).property('checked');
+    if (isChecked) {
+        state.properties.fill = 'none';
+    } else {
+        state.properties.fill = d3.select('#fillColor').property('value');
+    }
+    applyPropertyUpdate('fill', state.properties.fill);
+});
+
+d3.select('#fillColor').on('input', function () {
+    d3.select('#noFill').property('checked', false);
+    state.properties.fill = this.value;
+    applyPropertyUpdate('fill', this.value);
+});
+
+// Helper to apply updates
+function applyPropertyUpdate(prop, value) {
+    if (state.selectedElements.length > 0) {
+        state.selectedElements.forEach(el => {
+            el[prop] = value;
+            saveElementToFrame(el);
+        });
+        renderAllElements();
+        saveHistory();
+    }
+}
+
+// Re-bind other properties to use the helper if needed, or rely on existing bindings
+// Existing bindings are likely anonymous.
+// Let's bind stroke color too just in case defaults changed
+d3.select('#strokeColor').on('input', function () {
+    state.properties.stroke = this.value;
+    applyPropertyUpdate('stroke', this.value);
+});
 
 // Initialize history with the starting state
 saveHistory();
@@ -1764,13 +3004,62 @@ function showContextMenu(event, element) {
 
     // Store element ID for actions
     menu.attr('data-element-id', element.id);
+
+    // Show/hide Connect option based on multi-selection (exactly 2 connectable elements)
+    const canConnect = state.selectedElements.length === 2 &&
+        state.selectedElements.every(el =>
+            el.type !== 'line' && el.type !== 'arrow' && el.type !== 'link'
+        );
+
+    d3.select('#ctxConnect').style('display', canConnect ? 'block' : 'none');
 }
 
 function hideContextMenu() {
     d3.select('#contextMenu').classed('hidden', true);
 }
 
-// Context Menu Actions
+// Connect two selected elements with a persistent link
+function connectSelectedElements() {
+    if (state.selectedElements.length !== 2) return;
+
+    const el1 = state.selectedElements[0];
+    const el2 = state.selectedElements[1];
+
+    // Get centers
+    const center1 = getCenter(el1);
+    const center2 = getCenter(el2);
+
+    // Calculate boundary points
+    const pt1 = getBoundaryPoint(el1, center2);
+    const pt2 = getBoundaryPoint(el2, center1);
+
+    // Create persistent link (separate element, not grouping!)
+    const link = {
+        id: generateId(),
+        type: 'link',
+        x1: pt1.x,
+        y1: pt1.y,
+        x2: pt2.x,
+        y2: pt2.y,
+        startId: el1.id,
+        endId: el2.id,
+        stroke: state.properties.stroke,
+        strokeWidth: state.properties.strokeWidth,
+        opacity: state.properties.opacity
+    };
+
+    saveElementToFrame(link);
+
+    // Clear selection so objects can be moved independently
+    state.selectedElements = [];
+    state.selectedElement = null;
+
+    renderAllElements();
+    saveHistory();
+
+    console.log(`🔗 Connected: ${el1.id} ↔ ${el2.id}`);
+}
+
 // Context Menu Actions
 d3.select('#ctxCopy').on('click', () => {
     copyElement();
@@ -1779,6 +3068,11 @@ d3.select('#ctxCopy').on('click', () => {
 
 d3.select('#ctxPaste').on('click', () => {
     pasteElement();
+    hideContextMenu();
+});
+
+d3.select('#ctxConnect').on('click', () => {
+    connectSelectedElements();
     hideContextMenu();
 });
 
@@ -1836,19 +3130,28 @@ function renderSelectionBox() {
 
 function isElementInBox(element, box) {
     let bbox;
+    let centerX, centerY;
 
-    // Calculate bounding box based on type
-    if (element.type === 'rectangle' || element.type === 'text') {
-        bbox = { x: element.x, y: element.type === 'text' ? element.y - 20 : element.y, width: element.width || 100, height: element.height || 20 };
-        // Text width approximation if not available
-        if (element.type === 'text') {
-            // Approximation
-            const len = (element.text || "").length;
-            bbox.width = len * (element.fontSize || 16) * 0.6;
-            bbox.height = (element.fontSize || 16);
-        }
+    // Calculate bounding box and center point based on type
+    if (element.type === 'rectangle') {
+        bbox = { x: element.x, y: element.y, width: element.width, height: element.height };
+        centerX = element.x + element.width / 2;
+        centerY = element.y + element.height / 2;
+    } else if (element.type === 'text') {
+        const len = (element.text || "").length;
+        const width = len * (element.fontSize || 16) * 0.6;
+        const height = (element.fontSize || 16);
+        bbox = { x: element.x, y: element.y - height, width: width, height: height };
+        centerX = element.x + width / 2;
+        centerY = element.y - height / 2;
     } else if (element.type === 'circle') {
         bbox = { x: element.cx - element.rx, y: element.cy - element.ry, width: element.rx * 2, height: element.ry * 2 };
+        centerX = element.cx;
+        centerY = element.cy;
+    } else if (element.type === 'triangle' || element.type === 'diamond') {
+        bbox = { x: element.x, y: element.y, width: element.width, height: element.height };
+        centerX = element.x + element.width / 2;
+        centerY = element.y + element.height / 2;
     } else if (element.type === 'line' || element.type === 'arrow') {
         bbox = {
             x: Math.min(element.x1, element.x2),
@@ -1856,24 +3159,41 @@ function isElementInBox(element, box) {
             width: Math.abs(element.x2 - element.x1),
             height: Math.abs(element.y2 - element.y1)
         };
+        centerX = (element.x1 + element.x2) / 2;
+        centerY = (element.y1 + element.y2) / 2;
+    } else if (element.type === 'path') {
+        // For paths, use the position offset as the center
+        // This is a simplified approach - ideally we'd calculate the actual path bounds
+        centerX = element.x || 0;
+        centerY = element.y || 0;
+        bbox = { x: centerX - 50, y: centerY - 50, width: 100, height: 100 }; // Rough estimate
     } else if (element.type === 'group') {
-        // Group BBox is union of children
-        // Simplified: just check if origin is in box? No, that's bad.
-        // Let's iterate children.
-        // Or recursively check?
-        // If ANY child is in box, select group.
+        // If ANY child is in box, select group
         return element.children.some(child => isElementInBox(child, box));
+    } else {
+        return false;
     }
 
     if (!bbox) return false;
 
-    // Check intersection
-    return (
+    // Check if center point is inside the selection box (more intuitive for users)
+    const centerInBox = (
+        centerX >= box.x &&
+        centerX <= box.x + box.width &&
+        centerY >= box.y &&
+        centerY <= box.y + box.height
+    );
+
+    // Also check for intersection (at least partial overlap) as fallback
+    const hasIntersection = (
         bbox.x < box.x + box.width &&
         bbox.x + bbox.width > box.x &&
         bbox.y < box.y + box.height &&
         bbox.y + bbox.height > box.y
     );
+
+    // Select if center is in box OR if there's significant intersection
+    return centerInBox || hasIntersection;
 }
 
 function groupSelectedElements() {
@@ -1930,7 +3250,41 @@ function ungroupSelectedElements() {
     saveHistory();
 }
 
-// Bind new buttons
-d3.select('#groupBtn').on('click', groupSelectedElements);
-d3.select('#ungroupBtn').on('click', ungroupSelectedElements);
+function getHoveredConnector(pos) {
+    if (state.selectedElements.length !== 1) return null;
+
+    const element = state.selectedElements[0];
+    if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') return null;
+
+    const points = getConnectorPoints(element);
+    const threshold = 12; // Slightly larger tolerance for stability
+
+    // Find closest within threshold
+    let closest = null;
+    let minDist = Infinity;
+
+    for (const point of points) {
+        const dist = Math.sqrt(Math.pow(pos.x - point.x, 2) + Math.pow(pos.y - point.y, 2));
+        if (dist < threshold && dist < minDist) {
+            minDist = dist;
+            closest = { point, element };
+        }
+    }
+    return closest;
+}
+
+function getCursorForHandle(handle) {
+    if (!handle) return 'default';
+    if (typeof handle !== 'string') return 'move'; // fallback
+
+    const cursorMap = {
+        'nw': 'nw-resize', 'n': 'n-resize', 'ne': 'ne-resize',
+        'e': 'e-resize', 'se': 'se-resize', 's': 's-resize',
+        'sw': 'sw-resize', 'w': 'w-resize',
+        'start': 'move', 'end': 'move'
+    };
+    return cursorMap[handle] || 'move';
+}
+
+
 
