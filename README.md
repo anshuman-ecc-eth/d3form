@@ -29,4 +29,4 @@ D3.js • GSAP • Vanilla JS • No build tools required
 
 ---
 
-**MIT License**
+**GPL-3.0 License**
