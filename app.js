@@ -641,11 +641,7 @@ function showConnectorHandles(element) {
             .attr('stroke', '#ffffff')
             .attr('stroke-width', 2)
             .style('cursor', 'crosshair')
-            .style('pointer-events', 'all')
-            .on('mousedown', function (event) {
-                event.stopPropagation();
-                startConnectorDraw(event, point, element);
-            });
+            .style('pointer-events', 'none');
     });
 }
 
@@ -653,39 +649,7 @@ function hideConnectorHandles() {
     mainGroup.selectAll('.connector-handles').remove();
 }
 
-function showAllConnectorHandles() {
-    hideConnectorHandles(); // Clear existing
-
-    const elements = getCurrentFrameElements();
-    elements.forEach(element => {
-        // Skip line/arrow/link elements
-        if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') return;
-
-        const points = getConnectorPoints(element);
-        if (points.length === 0) return;
-
-        const handleGroup = mainGroup.append('g')
-            .attr('class', 'connector-handles')
-            .attr('data-element-id', element.id);
-
-        points.forEach(point => {
-            handleGroup.append('circle')
-                .attr('class', 'connector-handle')
-                .attr('cx', point.x)
-                .attr('cy', point.y)
-                .attr('r', 6)
-                .attr('fill', '#6366f1')
-                .attr('stroke', '#ffffff')
-                .attr('stroke-width', 2)
-                .style('cursor', 'crosshair')
-                .style('pointer-events', 'all')
-                .on('mousedown', function (event) {
-                    event.stopPropagation();
-                    startConnectorDraw(event, point, element);
-                });
-        });
-    });
-}
+// showAllConnectorHandles removed as Connector Mode is deprecated
 
 function showResizeHandles(element) {
     hideResizeHandles();
@@ -741,6 +705,9 @@ function startConnectorDraw(event, startPoint, sourceElement) {
     state.connectorStart = startPoint;
     state.connectorSourceElement = sourceElement;
 
+    // Show potential targets on other elements
+    showTargetSnapPoints(sourceElement.id);
+
     // Create temporary link
     const tempArrow = createLink(startPoint.x, startPoint.y, startPoint.x, startPoint.y);
     tempArrow.startId = sourceElement.id;
@@ -748,6 +715,36 @@ function startConnectorDraw(event, startPoint, sourceElement) {
 
     const rendered = renderElement(tempArrow);
     rendered.attr('id', 'temp-connector');
+}
+
+function showTargetSnapPoints(excludeElementId) {
+    hideTargetSnapPoints();
+    const elements = getCurrentFrameElements();
+
+    // Create a group for these points
+    const group = mainGroup.append('g').attr('class', 'target-snap-points');
+
+    elements.forEach(element => {
+        if (element.id === excludeElementId) return;
+        if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') return;
+
+        const points = getConnectorPoints(element);
+        points.forEach(point => {
+            group.append('circle')
+                .attr('cx', point.x)
+                .attr('cy', point.y)
+                .attr('r', 5)
+                .attr('fill', 'none') // Hollow green circles
+                .attr('stroke', '#22c55e')
+                .attr('stroke-width', 2)
+                .style('pointer-events', 'none')
+                .style('opacity', 0.6);
+        });
+    });
+}
+
+function hideTargetSnapPoints() {
+    mainGroup.selectAll('.target-snap-points').remove();
 }
 
 function findNearestConnectorPoint(pos, excludeElementId) {
@@ -819,6 +816,7 @@ function selectElement(element, toggle = false) {
 function updateSelection() {
     mainGroup.selectAll('.element-selected').classed('element-selected', false);
     hideResizeHandles();
+    hideConnectorHandles();
 
     if (state.selectedElements.length > 0) {
         state.selectedElements.forEach(el => {
@@ -826,13 +824,18 @@ function updateSelection() {
                 .classed('element-selected', true);
         });
 
-        // Show resize handles for single selection only
+        // Show resize handles logic
         if (state.selectedElements.length === 1) {
             const el = state.selectedElements[0];
             showResizeHandles(el);
+            // Also show connector handles for eligible elements
+            if (el.type !== 'line' && el.type !== 'arrow' && el.type !== 'link') {
+                showConnectorHandles(el);
+            }
         }
     }
 }
+
 
 function syncPropertiesFromElement(element) {
     if (!element) return;
@@ -920,6 +923,15 @@ svg.on('mousedown', function (event) {
     }
 
     const pos = getMousePosition(event);
+
+    // Draw Connector Check (Priority)
+    // Only if we have a selected element and it's not line/arrow (handled in getHoveredConnector)
+    const connector = getHoveredConnector(pos);
+    if (connector) {
+        event.stopPropagation();
+        startConnectorDraw(event, connector.point, connector.element);
+        return;
+    }
 
     if (state.currentTool === 'span') {
         state.isSelecting = true;
@@ -1097,6 +1109,40 @@ svg.on('mousemove', function (event) {
 
     // Global Cursor Update
     if (!state.dragState.isDragging && !state.isResizing && !state.isDrawing) {
+        // Check for connector handles (Priority over resize for smoothness)
+        // Use the existing getHoveredConnector which checks selected element
+        const connector = getHoveredConnector(pos);
+        if (connector) {
+            d3.select('body').style('cursor', 'none');
+
+            // Visual feedback for connector
+            // Find the specific visual handle
+            mainGroup.selectAll('.connector-handle')
+                .attr('r', 6)
+                .attr('fill', '#6366f1')
+                .style('filter', null);
+
+            // We need to find the specific circle corresponding to this point
+            // Since we don't have direct ref, we can check matching coords
+            mainGroup.selectAll('.connector-handle')
+                .filter(function () {
+                    const cx = parseFloat(d3.select(this).attr('cx'));
+                    const cy = parseFloat(d3.select(this).attr('cy'));
+                    return Math.abs(cx - connector.point.x) < 1 && Math.abs(cy - connector.point.y) < 1;
+                })
+                .attr('r', 8)
+                .attr('fill', '#ffffff')
+                .style('filter', 'drop-shadow(0 0 4px #6366f1)');
+
+            return;
+        } else {
+            // Reset connector visuals if no longer hovering
+            mainGroup.selectAll('.connector-handle')
+                .attr('r', 6)
+                .attr('fill', '#6366f1')
+                .style('filter', null);
+        }
+
         // Check for resize handles
         const target = findHandleOnAnyElement(pos);
         if (target) {
@@ -1172,6 +1218,7 @@ svg.on('mouseup', function (event) {
         mainGroup.select('#temp-connector').remove();
         hideSnapIndicator();
         hideConnectorHandles();
+        hideTargetSnapPoints();
 
         // Check if arrow has sufficient length
         const dx = state.tempConnectorArrow.x2 - state.tempConnectorArrow.x1;
@@ -3131,7 +3178,11 @@ document.addEventListener('keydown', (event) => {
                 break;
             case 'c':
                 event.preventDefault();
-                copyElement();
+                if (event.shiftKey) {
+                    centerAllElements();
+                } else {
+                    copyElement();
+                }
                 break;
             case 'd':
                 if (event.shiftKey) {
@@ -3143,6 +3194,7 @@ document.addEventListener('keydown', (event) => {
                 event.preventDefault();
                 pasteElement();
                 break;
+
         }
         return;
     }
@@ -3152,6 +3204,7 @@ document.addEventListener('keydown', (event) => {
             case 'v':
                 selectTool('select');
                 break;
+
             case 's':
                 selectTool('span');
                 break;
@@ -3195,6 +3248,17 @@ document.addEventListener('keydown', (event) => {
                     state.selectedElement = null;
                     renderAllElements();
                     saveHistory();
+                }
+                break;
+            // Connector Mode Toggle
+            case 'n':
+                state.connectorMode = !state.connectorMode;
+                if (state.connectorMode) {
+                    showAllConnectorHandles();
+                    d3.select('body').style('cursor', 'crosshair');
+                } else {
+                    hideConnectorHandles();
+                    d3.select('body').style('cursor', 'default');
                 }
                 break;
         }
@@ -3760,6 +3824,166 @@ function getCursorForHandle(handle) {
         'start': 'move', 'end': 'move'
     };
     return cursorMap[handle] || 'move';
+}
+
+// ===== Shortcuts Modal =====
+const shortcutsModal = d3.select('#shortcutsModal');
+const closeShortcutsBtn = d3.select('#closeShortcutsBtn');
+
+d3.select('#shortcutsBtn').on('click', () => {
+    shortcutsModal.classed('hidden', false);
+});
+
+closeShortcutsBtn.on('click', () => {
+    shortcutsModal.classed('hidden', true);
+});
+
+shortcutsModal.on('click', (event) => {
+    if (event.target === shortcutsModal.node()) {
+        shortcutsModal.classed('hidden', true);
+    }
+});
+
+// ===== Auto-Centering =====
+function centerAllElements() {
+    const elements = getCurrentFrameElements();
+    if (elements.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    elements.forEach(el => {
+        const bounds = getElementBounds(el);
+        if (bounds.minX < minX) minX = bounds.minX;
+        if (bounds.minY < minY) minY = bounds.minY;
+        if (bounds.maxX > maxX) maxX = bounds.maxX;
+        if (bounds.maxY > maxY) maxY = bounds.maxY;
+    });
+
+    if (minX === Infinity) return;
+
+    const totalWidth = maxX - minX;
+    const totalHeight = maxY - minY;
+
+    // Canvas dimensions (from global variables)
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const currentCenterX = minX + totalWidth / 2;
+    const currentCenterY = minY + totalHeight / 2;
+
+    const dx = centerX - currentCenterX;
+    const dy = centerY - currentCenterY;
+
+    // Move all elements
+    elements.forEach(element => {
+        simpleMoveElement(element, dx, dy);
+    });
+
+    renderAllElements();
+    saveHistory();
+}
+
+function getElementBounds(element) {
+    if (element.type === 'circle') {
+        return {
+            minX: element.cx - element.rx,
+            minY: element.cy - element.ry,
+            maxX: element.cx + element.rx,
+            maxY: element.cy + element.ry
+        };
+    } else if (element.type === 'line' || element.type === 'arrow' || element.type === 'link') {
+        return {
+            minX: Math.min(element.x1, element.x2),
+            minY: Math.min(element.y1, element.y2),
+            maxX: Math.max(element.x1, element.x2),
+            maxY: Math.max(element.y1, element.y2)
+        };
+    } else if (element.type === 'text') {
+        // Approximate bounds for text
+        const w = (element.text || '').length * (element.fontSize || 16) * 0.6;
+        const h = (element.fontSize || 16) * 1.2;
+        let x = element.x;
+        let y = element.y - h * 0.8; // Baseline adjustment
+
+        if (element.textAlign === 'middle') {
+            x -= w / 2;
+        }
+
+        return {
+            minX: x,
+            minY: y,
+            maxX: x + w,
+            maxY: y + h
+        };
+    } else if (element.type === 'group') {
+        // Recursive bounds for groups
+        let gMinX = Infinity, gMinY = Infinity, gMaxX = -Infinity, gMaxY = -Infinity;
+        element.children.forEach(child => {
+            const b = getElementBounds(child);
+            if (b.minX < gMinX) gMinX = b.minX;
+            if (b.minY < gMinY) gMinY = b.minY;
+            if (b.maxX > gMaxX) gMaxX = b.maxX;
+            if (b.maxY > gMaxY) gMaxY = b.maxY;
+        });
+        return { minX: gMinX, minY: gMinY, maxX: gMaxX, maxY: gMaxY };
+    } else {
+        // Rectangle, Triangle, Diamond
+        return {
+            minX: element.x,
+            minY: element.y,
+            maxX: element.x + element.width,
+            maxY: element.y + element.height
+        };
+    }
+}
+
+function simpleMoveElement(element, dx, dy) {
+    switch (element.type) {
+        case 'group':
+            element.children.forEach(child => simpleMoveElement(child, dx, dy));
+            element.x += dx;
+            element.y += dy;
+            break;
+        case 'rectangle':
+            element.x += dx;
+            element.y += dy;
+            break;
+        case 'circle':
+            element.cx += dx;
+            element.cy += dy;
+            break;
+        case 'triangle':
+        case 'diamond':
+            element.x += dx;
+            element.y += dy;
+            // Recalculate points based on new position
+            if (element.type === 'triangle') {
+                const x = element.x;
+                const y = element.y;
+                const width = element.width;
+                const height = element.height;
+                element.points = `${x + width / 2},${y} ${x + width},${y + height} ${x},${y + height}`;
+            } else {
+                const x = element.x;
+                const y = element.y;
+                const width = element.width;
+                const height = element.height;
+                element.points = `${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`;
+            }
+            break;
+        case 'line':
+        case 'arrow':
+        case 'link':
+            element.x1 += dx;
+            element.y1 += dy;
+            element.x2 += dx;
+            element.y2 += dy;
+            break;
+        case 'text':
+            element.x += dx;
+            element.y += dy;
+            break;
+    }
 }
 
 

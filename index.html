@@ -59,6 +59,15 @@
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </button>
+                <button id="shortcutsBtn" class="icon-btn" title="Keyboard Shortcuts">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" />
+                    </svg>
+                </button>
             </div>
         </header>
 
@@ -263,6 +272,29 @@
         <div class="menu-item effect-item" data-effect="highlight" id="ctxHighlight">🔦 Highlight Text</div>
         <div class="menu-divider"></div>
         <div class="menu-item delete" id="ctxDelete">🗑️ Delete</div>
+    </div>
+
+    <!-- Shortcuts Modal -->
+    <div id="shortcutsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button id="closeShortcutsBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="shortcuts-list">
+                <div class="shortcut-item"><span>Select Tool</span><span>V</span></div>
+                <div class="shortcut-item"><span>Rectangle</span><span>R</span></div>
+                <div class="shortcut-item"><span>Circle</span><span>C</span></div>
+                <div class="shortcut-item"><span>Text</span><span>T</span></div>
+                <div class="shortcut-item"><span>Line / Arrow</span><span>L / A</span></div>
+                <div class="shortcut-item"><span>Connect (2 items)</span><span>Right-click</span></div>
+                <div class="shortcut-item"><span>Undo / Redo</span><span>Ctrl+Z / Ctrl+Y</span></div>
+                <div class="shortcut-item"><span>Copy / Paste</span><span>Ctrl+C / Ctrl+V</span></div>
+                <div class="shortcut-item"><span>Duplicate Frame</span><span>Ctrl+Shift+D</span></div>
+                <div class="shortcut-item"><span>Auto Center</span><span>Ctrl+Shift+C</span></div>
+
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
