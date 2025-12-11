@@ -60,6 +60,42 @@ svg.attr('data-tool', state.currentTool);
 const mainGroup = svg.append('g').attr('class', 'main-group');
 
 // ===== Utility Functions =====
+function scrambleText(element, startText, endText, duration) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    const len = Math.max(startText.length, endText.length);
+    const obj = { value: 0 };
+
+    gsap.to(obj, {
+        value: 1,
+        duration: duration,
+        ease: "none",
+        onUpdate: () => {
+            const progress = obj.value;
+            const revealIdx = Math.floor(progress * endText.length);
+
+            // Handle disappearing case (endText is empty)
+            if (endText === "") {
+                const currentLen = Math.floor(startText.length * (1 - progress));
+                let result = "";
+                for (let i = 0; i < currentLen; i++) {
+                    result += chars[Math.floor(Math.random() * chars.length)];
+                }
+                element.textContent = result;
+                return;
+            }
+
+            let result = endText.substring(0, revealIdx);
+            const remaining = endText.length - revealIdx;
+
+            for (let i = 0; i < remaining; i++) {
+                result += chars[Math.floor(Math.random() * chars.length)];
+            }
+
+            element.textContent = result;
+        }
+    });
+}
+
 function generateId() {
     return `el-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -245,6 +281,38 @@ function ensureBlurFilters() {
 
 // ===== Rendering Functions =====
 function renderElement(element, selection) {
+    const rendered = renderShape(element, selection);
+
+    // Render attached label if present
+    if (rendered && element.label && element.label.text) {
+        const group = selection || mainGroup;
+        renderLabel(element, group);
+    }
+
+    return rendered;
+}
+
+function renderLabel(element, group) {
+    const center = getCenter(element);
+    const labelGroup = group.append('g')
+        .attr('id', `label-${element.id}`)
+        .attr('class', 'element-label')
+        .style('opacity', element.opacity !== undefined ? element.opacity : 1) // Inherit parent opacity
+        .style('pointer-events', 'none'); // Let clicks pass through to the element
+
+    labelGroup.append('text')
+        .attr('x', center.x)
+        .attr('y', center.y)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('fill', element.label.fill || '#1e293b')
+        .attr('font-family', element.label.fontFamily || 'Inter, sans-serif')
+        .attr('font-size', element.label.fontSize || 14)
+        .attr('font-weight', '500')
+        .text(element.opacity === 0 ? "" : element.label.text);
+}
+
+function renderShape(element, selection) {
     const group = selection || mainGroup;
 
     switch (element.type) {
@@ -331,6 +399,23 @@ function renderElement(element, selection) {
                 .attr('stroke-width', 20)
                 .style('pointer-events', 'all');
 
+            // Masking for label readability
+            let lineMaskAttrs = null;
+            if (element.label && element.label.text) {
+                const midX = (element.x1 + element.x2) / 2;
+                const midY = (element.y1 + element.y2) / 2;
+                const len = element.label.text.length;
+                const fSize = element.label.fontSize || 14;
+                const w = len * fSize * 0.8; // Estimate width
+                const h = fSize * 1.5;
+
+                const maskId = `mask-${element.id}`;
+                const mask = lineGroup.append('defs').append('mask').attr('id', maskId);
+                mask.append('rect').attr('x', -10000).attr('y', -10000).attr('width', 20000).attr('height', 20000).attr('fill', 'white');
+                mask.append('rect').attr('x', midX - w / 2).attr('y', midY - h / 2).attr('width', w).attr('height', h).attr('fill', 'black');
+                lineMaskAttrs = `url(#${maskId})`;
+            }
+
             // Visible line
             lineGroup.append('line')
                 .attr('x1', element.x1)
@@ -341,6 +426,7 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('stroke-linecap', 'round')
+                .attr('mask', lineMaskAttrs)
                 .style('pointer-events', 'none');
 
             return lineGroup;
@@ -368,6 +454,23 @@ function renderElement(element, selection) {
                 default: dashArray = null; // solid
             }
 
+            // Masking for label readability
+            let linkMaskAttrs = null;
+            if (element.label && element.label.text) {
+                const midX = (element.x1 + element.x2) / 2;
+                const midY = (element.y1 + element.y2) / 2;
+                const len = element.label.text.length;
+                const fSize = element.label.fontSize || 14;
+                const w = len * fSize * 0.8;
+                const h = fSize * 1.5;
+
+                const maskId = `mask-${element.id}`;
+                const mask = linkGroup.append('defs').append('mask').attr('id', maskId);
+                mask.append('rect').attr('x', -10000).attr('y', -10000).attr('width', 20000).attr('height', 20000).attr('fill', 'white');
+                mask.append('rect').attr('x', midX - w / 2).attr('y', midY - h / 2).attr('width', w).attr('height', h).attr('fill', 'black');
+                linkMaskAttrs = `url(#${maskId})`;
+            }
+
             // Visible link line
             linkGroup.append('line')
                 .attr('x1', element.x1)
@@ -379,6 +482,7 @@ function renderElement(element, selection) {
                 .attr('opacity', element.opacity)
                 .attr('stroke-linecap', 'round')
                 .attr('stroke-dasharray', dashArray)
+                .attr('mask', linkMaskAttrs)
                 .style('pointer-events', 'none');
 
             return linkGroup;
@@ -397,6 +501,23 @@ function renderElement(element, selection) {
                 .attr('stroke-width', 20)
                 .style('pointer-events', 'all');
 
+            // Masking for label readability
+            let arrowMaskAttrs = null;
+            if (element.label && element.label.text) {
+                const midX = (element.x1 + element.x2) / 2;
+                const midY = (element.y1 + element.y2) / 2;
+                const len = element.label.text.length;
+                const fSize = element.label.fontSize || 14;
+                const w = len * fSize * 0.8;
+                const h = fSize * 1.5;
+
+                const maskId = `mask-${element.id}`;
+                const mask = arrowGroup.append('defs').append('mask').attr('id', maskId);
+                mask.append('rect').attr('x', -10000).attr('y', -10000).attr('width', 20000).attr('height', 20000).attr('fill', 'white');
+                mask.append('rect').attr('x', midX - w / 2).attr('y', midY - h / 2).attr('width', w).attr('height', h).attr('fill', 'black');
+                arrowMaskAttrs = `url(#${maskId})`;
+            }
+
             // Visible arrow line
             arrowGroup.append('line')
                 .attr('x1', element.x1)
@@ -407,6 +528,7 @@ function renderElement(element, selection) {
                 .attr('stroke-width', element.strokeWidth)
                 .attr('opacity', element.opacity)
                 .attr('stroke-linecap', 'round')
+                .attr('mask', arrowMaskAttrs)
                 .style('pointer-events', 'none');
 
             // Arrow heads based on arrowHeads property (default: 'end')
@@ -483,7 +605,7 @@ function renderElement(element, selection) {
                 .attr('x', element.x)
                 .attr('y', element.y)
                 .attr('fill', element.fill)
-                .attr('opacity', element.opacity)
+                .style('opacity', element.opacity) // Use style for opacity to match GSAP animation
                 .attr('font-size', element.fontSize)
                 .attr('font-family', element.fontFamily || 'Inter, sans-serif')
                 .attr('font-weight', '500')
@@ -566,9 +688,12 @@ function setupElementInteractions(selection, element) {
             }
         })
         .on('dblclick', function (event) {
+            event.stopPropagation();
             if (element.type === 'text') {
-                event.stopPropagation();
                 editText(element);
+            } else {
+                // Double-click to add/edit label on shapes/lines
+                editLabel(element);
             }
         })
         .on('contextmenu', function (event) {
@@ -580,6 +705,31 @@ function setupElementInteractions(selection, element) {
             }
             showContextMenu(event, element);
         });
+}
+
+function editLabel(element) {
+    const hasLabel = element.label && element.label.text;
+    const currentText = hasLabel ? element.label.text : '';
+    const text = prompt(hasLabel ? 'Edit label text:' : 'Add label text:', currentText);
+
+    if (text !== null) {
+        if (text.trim() === '') {
+            delete element.label;
+        } else {
+            // Preserve existing styling if updating, or defaults if new
+            const currentLabel = element.label || {};
+            element.label = {
+                ...currentLabel,
+                text: text,
+                fontFamily: currentLabel.fontFamily || state.properties.fontFamily,
+                fontSize: currentLabel.fontSize || (state.properties.fontSize || 14),
+                fill: currentLabel.fill || (state.properties.stroke === '#ffffff' ? '#ffffff' : '#1e293b')
+            };
+        }
+        saveElementToFrame(element);
+        renderAllElements();
+        saveHistory();
+    }
 }
 
 // ===== Connector Handles =====
@@ -2031,10 +2181,8 @@ function animateFrameTransition(fromIndex, toIndex) {
             selection = renderElement(startState);
             setupElementInteractions(selection, toEl);
 
-            // Animate to final state
-            setTimeout(() => {
-                animateElement(selection, startState, toEl, duration, ease);
-            }, 10);
+            // Animate to final state immediately (no delay prevents flash)
+            animateElement(selection, startState, toEl, duration, ease);
         }
     });
 
@@ -2048,19 +2196,29 @@ function animateFrameTransition(fromIndex, toIndex) {
             animateElement(selection, fromEl, endState, duration, ease);
             setTimeout(() => {
                 selection.remove();
+                // Also remove label if present
+                mainGroup.select(`#label-${fromEl.id}`).remove();
             }, duration + 50);
         }
     });
 
+    // Clear any existing transition timer to prevent race conditions
+    if (state.transitionTimeout) {
+        clearTimeout(state.transitionTimeout);
+    }
+
     // Update frame after animation completes
-    setTimeout(() => {
+    state.transitionTimeout = setTimeout(() => {
         renderAllElements();
+        state.transitionTimeout = null;
     }, duration + 100);
 }
 
 // Create a start state for elements appearing (scaled down from center)
 function createStartStateForNewElement(element) {
     const startState = { ...element };
+    startState.opacity = 0; // Universal start opacity for appearance
+
 
     switch (element.type) {
         case 'rectangle':
@@ -2070,7 +2228,6 @@ function createStartStateForNewElement(element) {
             startState.y = centerY;
             startState.width = 0;
             startState.height = 0;
-            startState.opacity = 0;
             break;
 
         case 'triangle':
@@ -2200,6 +2357,76 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
     const fromRotation = fromEl.rotation || 0;
     const toRotation = toEl.rotation || 0;
 
+    // Animate associated label if it exists
+    let labelSelection = mainGroup.select(`#label-${toEl.id}`);
+
+    // If label is new (exists in toEl but not in DOM), render it
+    if (labelSelection.empty() && toEl.label && toEl.label.text) {
+        renderLabel(toEl, mainGroup);
+        labelSelection = mainGroup.select(`#label-${toEl.id}`);
+        // Ensure it starts empty for scramble
+        if (!labelSelection.empty()) {
+            labelSelection.select('text').text("");
+        }
+    }
+
+    if (!labelSelection.empty()) {
+        const fromCenter = getCenter(fromEl);
+        const toCenter = getCenter(toEl);
+        const labelText = labelSelection.select('text');
+        const labelNode = labelText.node();
+        const labelGroupNode = labelSelection.node();
+
+        // Determine Start and End Text for Scramble
+        let startText = labelNode.textContent || "";
+        let endText = toEl.label ? toEl.label.text : "";
+        if (toEl.opacity === 0) endText = "";
+
+        // If appearing, force start text to empty to prevent flash of full text before scramble
+        if (fromEl.opacity === 0) {
+            startText = "";
+            labelNode.textContent = "";
+        }
+
+        // Disable Opacity Fade: Instant Visibility for Scramble
+        // If departing (toEl.opacity 0), we keep it visible (1). If appearing, jump to visible (1).
+        const targetOpacity = (toEl.opacity === 0) ? (fromEl.opacity || 1) : (toEl.opacity || 1);
+
+        gsap.set(labelGroupNode, {
+            opacity: targetOpacity
+        });
+
+        // Animate Text Position
+        gsap.to(labelNode, {
+            attr: { x: toCenter.x, y: toCenter.y },
+            duration: duration / 1000,
+            ease: 'power2.out'
+        });
+
+        // Run Scramble
+        if (startText !== endText || toEl.opacity === 0 || fromEl.opacity === 0) {
+            scrambleText(labelNode, startText, endText, duration / 1000);
+        }
+
+        // Mask Animation (sync with label move)
+        const maskRectSelection = selection.select(`#mask-${toEl.id} rect:nth-child(2)`);
+
+        if (!maskRectSelection.empty()) {
+            const labelStr = endText; // Target mask for target text
+            const fSize = (toEl.label && toEl.label.fontSize) || 14;
+            const w = labelStr.length * fSize * 0.8;
+            const h = fSize * 1.5;
+            const maskTargetX = toCenter.x - w / 2;
+            const maskTargetY = toCenter.y - h / 2;
+
+            gsap.to(maskRectSelection.node(), {
+                attr: { x: maskTargetX, y: maskTargetY, width: w },
+                duration: duration / 1000,
+                ease: 'power2.out'
+            });
+        }
+    }
+
     switch (toEl.type) {
         case 'rectangle':
             const rectCx = toEl.x + toEl.width / 2;
@@ -2324,8 +2551,59 @@ function animateElement(selection, fromEl, toEl, duration, ease) {
             break;
 
         case 'text':
-            // Word-level text animation using GSAP
-            animateTextWordLevel(selection, fromEl, toEl, duration);
+            // Pure GSAP Scramble animation for text elements
+            const textRect = selection.select('rect').node();
+            const textEl = selection.select('text').node();
+
+            // Determine Scramble Params
+            let tStartText = textEl.textContent || "";
+            if (fromEl.opacity === 0) {
+                tStartText = "";
+                textEl.textContent = "";
+            }
+            let tEndText = toEl.text;
+            if (toEl.opacity === 0) tEndText = "";
+
+            // Calculate dimensions based on End Text
+            const textWidth = (tEndText || '').length * (toEl.fontSize || 16) * 0.6;
+            const textHeight = (toEl.fontSize || 16) * 1.2;
+            const rectX = toEl.textAlign === 'middle' ? toEl.x - textWidth / 2 : toEl.x;
+            const rectY = toEl.y - textHeight * 0.8;
+
+            // Animate background rect
+            gsap.to(textRect, {
+                attr: {
+                    x: rectX,
+                    y: rectY,
+                    width: textWidth,
+                    height: textHeight
+                },
+                duration: duration / 1000,
+                ease: 'power2.out'
+            });
+
+            // Disable Opacity Fade: Instant Visibility for Scramble
+            const tTargetOpacity = (toEl.opacity === 0) ? (fromEl.opacity || 1) : (toEl.opacity || 1);
+
+            // Animate text props (except text content/opacity fade)
+            gsap.to(textEl, {
+                attr: {
+                    x: toEl.x,
+                    y: toEl.y,
+                    fill: toEl.fill,
+                    'font-size': toEl.fontSize
+                },
+                duration: duration / 1000,
+                ease: 'power2.out'
+            });
+
+            // Set Opacity Instantly
+            gsap.set(textEl, { opacity: tTargetOpacity });
+
+            // Run Scramble
+            if (tStartText !== tEndText || toEl.opacity === 0 || fromEl.opacity === 0) {
+                scrambleText(textEl, tStartText, tEndText, duration / 1000);
+            }
             break;
 
         case 'link':
@@ -2390,8 +2668,8 @@ function animateTextWordLevel(selection, fromEl, toEl, duration) {
     const fontSize = toEl.fontSize || 16;
     const fontFamily = toEl.fontFamily || 'Inter, sans-serif';
 
-    // Use much longer duration for smoother text animation
-    const textDuration = Math.max(duration * 1.5, 1000);
+    // Match global duration to ensure it completes before the frame transition cleanup
+    const textDuration = duration;
     const durationSec = textDuration / 1000;
 
     // Get DOM nodes
@@ -2421,9 +2699,11 @@ function animateTextWordLevel(selection, fromEl, toEl, duration) {
 
         const textNode = textEl.node();
 
-        // Smooth position animation
+        // Smooth position and opacity animation
+        // We separate opacity to let GSAP handle it via CSS/style for better smoothness
         gsap.to(textNode, {
-            attr: { x: toEl.x, y: toEl.y },
+            attr: { x: toEl.x, y: toEl.y, fill: toEl.fill },
+            opacity: toEl.opacity !== undefined ? toEl.opacity : 1,
             duration: durationSec,
             ease: 'sine.inOut'
         });
@@ -2470,7 +2750,8 @@ function animateTextWordLevel(selection, fromEl, toEl, duration) {
             .attr('x', toEl.x)
             .attr('y', toEl.y)
             .attr('fill', toEl.fill)
-            .attr('font-size', fontSize);
+            .attr('font-size', fontSize)
+            .style('opacity', toEl.opacity !== undefined ? toEl.opacity : 1);
 
         // Update text content at midpoint
         if (textChanged) {
@@ -2715,39 +2996,30 @@ function showContextMenu(event, element) {
     menu.append('div').attr('class', 'context-menu-divider');
 
     // Add Label action
+    // Add/Edit Label action
+    const hasLabel = element.label && element.label.text;
     menu.append('div')
         .attr('class', 'context-menu-item context-menu-action')
-        .text('Add Label')
+        .text(hasLabel ? 'Edit Label' : 'Add Label')
         .on('click', function () {
-            const text = prompt('Enter label text:', 'Label');
-            if (text) {
-                let cx, cy;
-                if (element.type === 'circle') { cx = element.cx; cy = element.cy; }
-                else if (element.type === 'line' || element.type === 'arrow') {
-                    cx = (element.x1 + element.x2) / 2; cy = (element.y1 + element.y2) / 2;
+            const currentText = hasLabel ? element.label.text : '';
+            const text = prompt('Enter label text:', currentText);
+            if (text !== null) { // Allow empty string to clear? Or just non-null
+                if (text.trim() === '') {
+                    // Remove label if empty
+                    delete element.label;
+                } else {
+                    // Update/Set label
+                    element.label = {
+                        text: text,
+                        fontFamily: state.properties.fontFamily,
+                        fontSize: state.properties.fontSize || 14,
+                        fill: state.properties.stroke === '#ffffff' ? '#ffffff' : '#1e293b' // Contrast heuristic? Or just default
+                    };
                 }
-                else { cx = element.x + element.width / 2; cy = element.y + element.height / 2; }
-
-                const label = createText(cx, cy);
-                label.text = text;
-                label.textAlign = 'middle';
-
-                // Create Group
-                const group = {
-                    id: generateId(),
-                    type: 'group',
-                    children: [element, label],
-                    x: 0, y: 0
-                };
-
-                const frameElements = getCurrentFrameElements();
-                const idx = frameElements.findIndex(e => e.id === element.id);
-                if (idx !== -1) {
-                    frameElements[idx] = group;
-                    selectElement(group);
-                    renderAllElements();
-                    saveHistory();
-                }
+                saveElementToFrame(element);
+                renderAllElements();
+                saveHistory();
             }
             hideContextMenu();
         });
@@ -3360,6 +3632,10 @@ function showContextMenu(event, element) {
     console.log(`Context menu: ${state.selectedElements.length} elements selected, canConnect=${canConnect}`);
     d3.select('#ctxConnect').style('display', canConnect ? 'block' : 'none');
 
+    // Update Label option text
+    const hasLabel = element.label && element.label.text;
+    d3.select('#ctxLabel').text(hasLabel ? '🏷️ Edit Label' : '🏷️ Add Label');
+
     // Show Highlight option only for text elements
     d3.select('.effect-item[data-effect="highlight"]').style('display', element.type === 'text' ? 'block' : 'none');
 
@@ -3428,6 +3704,17 @@ d3.select('#ctxPaste').on('click', () => {
 
 d3.select('#ctxConnect').on('click', () => {
     connectSelectedElements();
+    hideContextMenu();
+});
+
+d3.select('#ctxLabel').on('click', () => {
+    const id = d3.select('#contextMenu').attr('data-element-id');
+    const elements = getCurrentFrameElements();
+    const element = elements.find(el => el.id === id);
+
+    if (element) {
+        editLabel(element);
+    }
     hideContextMenu();
 });
 
